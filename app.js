@@ -20,7 +20,7 @@ const settings = (() => {
   return { length: 120, quality: '720', ...s };
 })();
 const saveSettings = () => { try { localStorage.setItem('rr_settings', JSON.stringify(settings)); } catch { /* ignore */ } };
-const myName = () => (localStorage.getItem('rr_name') || '').trim() || 'Me';
+const myName = () => ((FAKECAM && params.get('as')) || localStorage.getItem('rr_name') || '').trim() || 'Me';
 
 // ---------- helpers ----------
 function show(id) {
