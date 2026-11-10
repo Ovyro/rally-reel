@@ -156,8 +156,22 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #ff6a1f33; }
 .room-actions { display: grid; gap: 10px; margin-top: 16px; }
 .recs { display: grid; gap: 8px; margin-bottom: 16px; }
 .rec-row { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px; }
-.rec-row .avatar { width: 36px; height: 36px; font-size: 14px; cursor: default; }
-.rec-row div { flex: 1; min-width: 0; }
+.rec-row .avatar { width: 36px; height: 36px; font-size: 14px; cursor: default; flex: none; }
+.rec-row > div:not(.avatar) { flex: 1; min-width: 0; }
+
+/* start-together */
+.sync-panel { align-self: center; text-align: center; background: #000b; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 22px; padding: 16px 20px; max-width: 340px; }
+.sync-text { font-weight: 800; font-size: 17px; }
+.sync-people { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; }
+.sync-people span { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: #ffffff18; color: #c9d0ea; }
+.sync-people span.ok { background: var(--green); color: #002414; }
+.countdown { font-size: 120px; font-weight: 900; line-height: 1; color: #fff; text-shadow: 0 10px 40px #ff3b5c; animation: pop2 1s ease-out infinite; }
+@keyframes pop2 { 0% { transform: scale(1.4); opacity: .3; } 30% { transform: scale(1); opacity: 1; } }
+.room-bottom { flex-direction: column; gap: 8px; }
+.ready-btn { min-width: 220px; padding: 18px 28px; border-radius: 999px; border: 0; font: inherit; font-size: 20px; font-weight: 900; cursor: pointer; color: #002414;
+  background: linear-gradient(135deg, #2fd18b, #8bf0c0); box-shadow: 0 14px 40px -12px #2fd18b; }
+.ready-btn.on { background: #ffffff22; color: #fff; box-shadow: none; }
+.link-btn.light { color: #e3e8ff; }
 .rec-row b { display: block; font-size: 15px; }
 .rec-row span { color: var(--muted); font-size: 13px; }
 .badge-live { font-size: 11px; font-weight: 800; color: #fff; background: var(--red); border-radius: 999px; padding: 2px 8px; animation: blink 1.2s infinite; }

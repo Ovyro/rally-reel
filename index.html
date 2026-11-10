@@ -119,7 +119,16 @@
 
   <div id="rec-idle" class="cam-ui">
     <div class="cam-top"><button id="rec-back" class="pill">✕</button><span class="pill soft" id="rec-hint">Turn your phone sideways · point at the court</span></div>
-    <div class="cam-bottom"><div class="side-btn ghosty"></div><button id="rec-start" class="shutter" aria-label="Start recording"><span></span></button><div class="side-btn ghosty"></div></div>
+    <div id="sync-panel" class="sync-panel" hidden>
+      <div id="countdown" class="countdown" hidden>3</div>
+      <div id="sync-text" class="sync-text">Tap “I'm ready” – everyone starts together</div>
+      <div id="sync-people" class="sync-people"></div>
+    </div>
+    <div class="cam-bottom" id="solo-bottom"><div class="side-btn ghosty"></div><button id="rec-start" class="shutter" aria-label="Start recording"><span></span></button><div class="side-btn ghosty"></div></div>
+    <div class="cam-bottom room-bottom" id="room-bottom" hidden>
+      <button id="rec-ready" class="ready-btn">I'm ready</button>
+      <button id="rec-solo-start" class="link-btn light">Start without waiting</button>
+    </div>
   </div>
 
   <div id="rec-live" class="cam-ui" hidden>

@@ -103,6 +103,19 @@ export async function setMemberState(code, state, extra = {}) {
   } catch { /* offline – fine */ }
 }
 
+// "I'm ready" – when everyone present is ready, all phones start together.
+export async function setReady(code, on) {
+  if (!code || !db) return;
+  await fs.setDoc(fs.doc(db, 'rooms', code, 'members', memberKey()),
+    { uid, ready: !!on, readyAt: on ? fs.serverTimestamp() : null, state: 'here', seen: fs.serverTimestamp() }, { merge: true });
+}
+
+// Ask every phone in the room to stop recording.
+export async function requestStopAll(code) {
+  if (!code || !db) return;
+  await fs.setDoc(fs.doc(db, 'rooms', code, 'members', memberKey()), { uid, stopAllAt: fs.serverTimestamp() }, { merge: true });
+}
+
 // Live updates of members / recordings / reels. Returns an unsubscribe function.
 export function watchRoom(code, cb) {
   const offs = [];

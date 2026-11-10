@@ -369,7 +369,7 @@ function memberStatus(m) {
   const fresh = R.now() - seen < 3 * 60 * 1000;
   if (m.state === 'recording' && fresh) return ['live', 'Recording'];
   if (m.state === 'left') return ['', 'Left'];
-  if (fresh) return ['on', 'Here'];
+  if (fresh) return ['on', m.ready ? 'Ready ✓' : 'Here'];
   return ['', 'Away'];
 }
 
@@ -409,7 +409,8 @@ function renderRoom() {
     if (x.link) { const a = el('a', 'btn primary', '▶ Watch'); a.href = x.link; a.target = '_blank'; a.rel = 'noopener'; row.append(a); }
     return row;
   }) : [el('p', 'muted small', 'Highlights anyone makes show up here for everyone.')]));
-  if (recorder && recorder.recording) updateRoomPill();
+  if (recorder && recorder.recording) { updateRoomPill(); checkStopAll(); }
+  else if (recorder) checkSync();
 }
 
 $('#room-rec').addEventListener('click', () => needDrive(() => openCamera(curRoom)));
@@ -426,6 +427,10 @@ function openCamera(roomCode) {
   $('#rec-idle').hidden = false; $('#rec-live').hidden = true; $('#rec-finish').hidden = true;
   $('#reauth').hidden = true;
   $('#rec-hint').textContent = roomCode ? `Room ${roomCode} · sideways, whole court in view` : 'Turn your phone sideways · point at the court';
+  $('#solo-bottom').hidden = !!roomCode; $('#room-bottom').hidden = !roomCode; $('#sync-panel').hidden = !roomCode;
+  $('#countdown').hidden = true; amReady = false; primed = false; syncStartAt = 0;
+  $('#rec-ready').textContent = "I'm ready"; $('#rec-ready').classList.remove('on');
+  if (roomCode) checkSync();
   recorder = new Recorder(drive, { onStatus: recStatus, onNeedAuth: (on) => { $('#reauth').hidden = !on; if (on && navigator.vibrate) navigator.vibrate(200); } });
   recorder.openCamera($('#preview'), settings.quality, FAKECAM)
     .then(() => keepAwake(true))
@@ -433,7 +438,73 @@ function openCamera(roomCode) {
 }
 function backFromCamera() { if (recRoom && curRoom) { show('room'); renderRoom(); } else goHome(); }
 
-$('#rec-back').addEventListener('click', () => { if (recorder) recorder.closeCamera(); recorder = null; keepAwake(false); backFromCamera(); });
+$('#rec-back').addEventListener('click', () => {
+  if (recRoom && amReady) R.setReady(recRoom, false).catch(() => {});
+  amReady = false;
+  if (recorder) recorder.closeCamera(); recorder = null; keepAwake(false); backFromCamera();
+});
+
+// ----- start together -----
+let amReady = false, primed = false, syncStartAt = 0, syncTimer = null;
+const present = () => (roomState ? roomState.members.filter((m) => { const c = memberStatus(m)[0]; return c === 'on' || c === 'live'; }) : []);
+
+$('#rec-ready').addEventListener('click', () => {
+  if (!recorder || !recorder.stream || !recRoom) return;
+  if (!primed) { recorder.prime(); primed = true; } // audio needs this tap
+  amReady = !amReady;
+  $('#rec-ready').textContent = amReady ? 'Ready ✓ (tap to undo)' : "I'm ready";
+  $('#rec-ready').classList.toggle('on', amReady);
+  if (navigator.vibrate) navigator.vibrate(30);
+  R.setReady(recRoom, amReady).catch(() => toast('Could not reach the room – check internet.'));
+  checkSync();
+});
+$('#rec-solo-start').addEventListener('click', () => {
+  if (!recorder || !recorder.stream) return;
+  if (!primed) { recorder.prime(); primed = true; }
+  startRecording(recRoom ? R.now() : Date.now());
+});
+
+// Every phone computes the same start time: last "ready" tap + 4 s (server clock).
+function checkSync() {
+  if (!recRoom || !recorder || recorder.recording || $('#record').hidden) return;
+  const ps = present();
+  const ready = ps.filter((m) => m.ready && m.readyAt && m.readyAt.toMillis);
+  const waiting = ps.filter((m) => !(m.ready && m.readyAt));
+  const box = $('#sync-people');
+  box.replaceChildren(...ps.map((m) => el('span', m.ready ? 'ok' : '', (m.ready ? '✓ ' : '') + (m.id === R.memberKey() ? 'You' : m.who || '?'))));
+  const someoneLive = ps.some((m) => m.state === 'recording' && m.id !== R.memberKey());
+  if (!amReady) {
+    syncStartAt = 0; $('#countdown').hidden = true;
+    $('#sync-text').textContent = someoneLive ? 'Others are already filming – tap “I\'m ready” to join in' : 'Tap “I\'m ready” – everyone starts together';
+    return;
+  }
+  if (waiting.length) {
+    syncStartAt = 0; $('#countdown').hidden = true;
+    $('#sync-text').textContent = `${ready.length}/${ps.length} ready · waiting for ${waiting.map((m) => m.who || '?').join(', ')}`;
+    return;
+  }
+  const at = Math.max(...ready.map((m) => m.readyAt.toMillis())) + 4000;
+  if (at !== syncStartAt) { syncStartAt = at; runCountdown(); }
+}
+
+function runCountdown() {
+  clearInterval(syncTimer);
+  $('#sync-text').textContent = 'Everyone is ready!';
+  const tick = () => {
+    if (!syncStartAt || !recorder || recorder.recording) { clearInterval(syncTimer); return; }
+    const left = syncStartAt - R.now();
+    if (left <= 0) {
+      clearInterval(syncTimer);
+      $('#countdown').hidden = true;
+      if (left > -15000) startRecording(syncStartAt); else syncStartAt = 0;
+      return;
+    }
+    $('#countdown').hidden = false;
+    const n = String(Math.ceil(left / 1000));
+    if ($('#countdown').textContent !== n) { $('#countdown').textContent = n; if (navigator.vibrate) navigator.vibrate(60); }
+  };
+  syncTimer = setInterval(tick, 50); tick();
+}
 
 function updateRoomPill() {
   const p = $('#rec-room');
@@ -445,10 +516,15 @@ function updateRoomPill() {
 
 $('#rec-start').addEventListener('click', () => {
   if (!recorder || !recorder.stream) return;
+  if (!primed) { recorder.prime(); primed = true; } // must happen right in the tap
+  startRecording(Date.now());
+});
+
+function startRecording(startMs) {
+  if (!recorder || !recorder.stream || recorder.recording) return;
   try { pickMime(); } catch (e) { toast(e.message); return; }
-  recorder.prime(); // must happen right in the tap
+  if (!primed) { recorder.prime(); primed = true; }
   const room = recRoom && roomState && roomState.room ? roomState.room : null;
-  const startMs = room ? R.now() : Date.now();
   const name = stamp() + (room ? ` · ${room.name} [${room.code}]` : '');
   let recIdP = null;
   if (room) {
@@ -467,13 +543,22 @@ $('#rec-start').addEventListener('click', () => {
   busy = true;
   $('#rec-idle').hidden = true; $('#rec-live').hidden = false;
   updateRoomPill();
+  if (navigator.vibrate) navigator.vibrate([80, 60, 80]);
   const tick = () => {
     if (!recorder || !recorder.recording) return;
     $('#rec-time').textContent = fmtTime(recorder.elapsed);
     setTimeout(tick, 500);
   };
   tick();
-});
+}
+
+// Someone tapped "Stop everyone" → stop this phone too.
+function checkStopAll() {
+  if (!recRoom || !recorder || !recorder.recording || !roomState) return;
+  const startedAt = recorder.meta && recorder.meta.startMs;
+  const req = roomState.members.some((m) => m.stopAllAt && m.stopAllAt.toMillis && m.stopAllAt.toMillis() > startedAt + 1000);
+  if (req) { toast('Recording stopped for everyone'); stopRecording(); }
+}
 
 function recStatus(s) {
   $('#rec-cloud').textContent = s.waiting ? `☁ ${s.uploaded} saved · ${s.waiting} sending` : `☁ ${s.uploaded} saved`;
@@ -497,9 +582,30 @@ let justRecorded = null;
 $('#rec-stop').addEventListener('click', async () => {
   if (!recorder || !recorder.recording) return;
   if (!drive.valid) drive.signIn('').catch(() => {});
+  if (recRoom) {
+    const others = present().filter((m) => m.state === 'recording' && m.id !== R.memberKey()).length;
+    if (others) {
+      const c = await sheet((b, close) => {
+        b.append(el('h3', '', 'Stop recording'), el('p', 'muted', `${others} other phone${others === 1 ? ' is' : 's are'} still filming.`));
+        const btns = el('div', 'btns');
+        const all = el('button', 'btn rec big', '■ Stop everyone'); all.onclick = () => close('all');
+        const me = el('button', 'btn big', 'Just me'); me.onclick = () => close('me');
+        const no = el('button', 'btn ghost big', 'Keep filming'); no.onclick = () => close(null);
+        btns.append(all, me, no); b.append(btns);
+      });
+      if (!c) return;
+      if (c === 'all') R.requestStopAll(recRoom).catch(() => {});
+    }
+  }
+  stopRecording();
+});
+
+async function stopRecording() {
+  if (!recorder || !recorder.recording) return;
   $('#rec-live').hidden = true; $('#rec-finish').hidden = false;
   const r = recorder;
   const room = recRoom;
+  if (room) { amReady = false; R.setReady(room, false).catch(() => {}); }
   const res = await r.stop((n, mb) => { $('#finish-msg').textContent = `Sending the last ${n} piece${n === 1 ? '' : 's'} to Drive (${mb.toFixed(0)} MB)… keep the app open`; });
   busy = false;
   keepAwake(false);
@@ -513,7 +619,7 @@ $('#rec-stop').addEventListener('click', async () => {
   justRecorded = { id: res.folderId, name: r.folderName };
   show('done');
   $('#done-msg').textContent = `${fmtTime(res.meta.duration)} saved to your Google Drive${r.failed ? ` (${r.failed} pieces failed to upload)` : ''}. Nothing was kept on your phone.`;
-});
+}
 $('#done-make').addEventListener('click', () => { if (justRecorded) makeHighlights({ folder: justRecorded }); });
 $('#done-home').addEventListener('click', goHome);
 

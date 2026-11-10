@@ -1,5 +1,5 @@
 // Keeps the app itself (a few small files) available offline. Videos are never cached here.
-const CACHE = 'rally-reel-v3';
+const CACHE = 'rally-reel-v4';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'drive.js', 'recorder.js', 'analyzer.js',
   'highlights.js', 'renderer.js', 'demo.js', 'importer.js', 'rooms.js', 'privacy.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
