@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rally Reel</title>
+<meta name="theme-color" content="#0b1020">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rally Reel">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="styles.css">
+<script src="config.js"></script>
+</head>
+<body>
+
+<!-- first-time setup -->
+<section id="setup" class="screen" hidden>
+  <div class="wrap">
+    <h1 class="logo"><span class="ball"></span>Rally Reel</h1>
+    <p>One-time setup: paste your Google <b>Client ID</b> so the app can save videos to <b>your</b> Google Drive.</p>
+    <p class="muted small">Don't have one yet? Follow <b>SETUP.md</b> (about 5 minutes, free). Use this as the "Authorized JavaScript origin":<br><code id="origin"></code></p>
+    <form id="setup-form">
+      <input id="client-id" placeholder="xxxxxxxx.apps.googleusercontent.com" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <button class="btn primary big" type="submit">Save</button>
+    </form>
+    <p class="muted small">Just want to try it? <a href="?demo">Open the demo</a> (fake camera, nothing saved).</p>
+  </div>
+</section>
+
+<!-- home -->
+<section id="home" class="screen" hidden>
+  <div class="wrap">
+    <header class="top">
+      <h1 class="logo"><span class="ball"></span>Rally Reel</h1>
+      <span class="demo-tag">DEMO</span>
+    </header>
+
+    <div id="connect-card" class="card connect" hidden>
+      <div class="card-title">Connect Google Drive</div>
+      <p class="muted">Your games are saved to a <b>Volleyball Highlights</b> folder in your Drive – not on your phone.</p>
+      <button id="connect" class="btn primary big">Connect Google Drive</button>
+    </div>
+
+    <button id="record-btn" class="record-cta" disabled>
+      <span class="dot"></span>
+      <span><b>Record a game</b><small>Saves straight to Google Drive</small></span>
+    </button>
+
+    <h2>Your games</h2>
+    <div id="list"></div>
+
+    <details class="settings">
+      <summary>Settings</summary>
+      <div class="row"><span>Highlight video length</span>
+        <div class="seg"><button data-len="60">1 min</button><button data-len="120">2 min</button><button data-len="240">4 min</button></div>
+      </div>
+      <div class="row"><span>Recording quality</span>
+        <div class="seg"><button data-q="720">720p</button><button data-q="1080">1080p</button></div>
+      </div>
+      <p class="muted small">720p uses ≈1.6 GB of Drive per hour, 1080p ≈2.7 GB. Free Google Drive has 15 GB – use "⋯ → Free up space" after making highlights.</p>
+      <button id="reset-client" class="btn ghost small">Change Google Client ID</button>
+    </details>
+  </div>
+</section>
+
+<!-- camera -->
+<section id="record" class="screen cam" hidden>
+  <video id="preview" playsinline muted autoplay></video>
+  <button id="reauth" class="reauth" hidden>⚠ Google sign-in expired – tap to keep saving</button>
+
+  <div id="rec-idle" class="cam-ui">
+    <div class="cam-top"><button id="rec-back" class="pill">✕</button><span class="pill muted-pill">Turn phone sideways · point at the court</span></div>
+    <div class="cam-bottom"><button id="rec-start" class="shutter" aria-label="Start recording"><span></span></button></div>
+  </div>
+
+  <div id="rec-live" class="cam-ui" hidden>
+    <div class="cam-top">
+      <span class="pill rec"><i></i><span id="rec-time">0:00</span></span>
+      <span id="rec-cloud" class="pill">☁ connecting…</span>
+    </div>
+    <div class="cam-bottom">
+      <button id="rec-mark" class="side-btn" aria-label="Mark a great play">★<small>Great play</small></button>
+      <button id="rec-stop" class="shutter stop" aria-label="Stop"><span></span></button>
+      <div class="side-btn ghosty"></div>
+    </div>
+  </div>
+
+  <div id="rec-finish" class="cam-ui finish" hidden>
+    <div class="spinner"></div>
+    <p id="finish-msg">Finishing upload…</p>
+  </div>
+</section>
+
+<!-- after recording -->
+<section id="done" class="screen" hidden>
+  <div class="wrap center">
+    <div class="big-check">✓</div>
+    <h1>Saved!</h1>
+    <p id="done-msg" class="muted"></p>
+    <button id="done-make" class="btn primary big">✨ Make Highlights</button>
+    <button id="done-home" class="btn ghost">Later</button>
+  </div>
+</section>
+
+<!-- editing -->
+<section id="edit" class="screen" hidden>
+  <div class="wrap">
+    <div id="edit-working">
+      <h1>Making your highlights</h1>
+      <p id="edit-msg" class="muted">Starting…</p>
+      <canvas id="edit-canvas" class="preview-canvas" width="1280" height="720"></canvas>
+      <div class="bar"><div id="edit-bar"></div></div>
+      <p class="muted small">The editor plays your best rallies into a new video in real time, so it takes about as long as the highlight video. Keep the screen on.</p>
+      <button id="edit-cancel" class="btn ghost small">Stop</button>
+    </div>
+    <div id="edit-result" hidden>
+      <h1>Your highlights 🏐</h1>
+      <p id="result-msg" class="muted"></p>
+      <video id="edit-video" class="preview-canvas" controls playsinline></video>
+      <div class="actions">
+        <a id="open-drive" class="btn primary" target="_blank" rel="noopener">Open in Google Drive</a>
+        <button id="share" class="btn">Share…</button>
+        <button id="edit-done" class="btn ghost">Done</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div id="toast" class="toast" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
