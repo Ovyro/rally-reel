@@ -1,9 +1,9 @@
-import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js';
-import { Recorder, pickMime } from './recorder.js';
-import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js';
-import { renderReel, makePlayers } from './renderer.js';
-import { analyzeFile, guessMime } from './importer.js';
-import * as R from './rooms.js';
+import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=6';
+import { Recorder, pickMime } from './recorder.js?v=6';
+import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=6';
+import { renderReel, makePlayers } from './renderer.js?v=6';
+import { analyzeFile, guessMime } from './importer.js?v=6';
+import * as R from './rooms.js?v=6';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
