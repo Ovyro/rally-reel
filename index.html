@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Rally Reel</title>
-<meta name="theme-color" content="#0b1020">
+<meta name="description" content="Film volleyball with your friends. Auto-edited multi-angle highlights, saved to your Google Drive.">
+<meta name="theme-color" content="#070b18">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,75 +13,120 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <script src="config.js"></script>
 </head>
 <body>
+<div class="glow g1"></div><div class="glow g2"></div>
 
-<!-- first-time setup -->
-<section id="setup" class="screen" hidden>
-  <div class="wrap">
-    <h1 class="logo"><span class="ball"></span>Rally Reel</h1>
-    <p>One-time setup: paste your Google <b>Client ID</b> so the app can save videos to <b>your</b> Google Drive.</p>
-    <p class="muted small">Don't have one yet? Follow <b>SETUP.md</b> (about 5 minutes, free). Use this as the "Authorized JavaScript origin":<br><code id="origin"></code></p>
-    <form id="setup-form">
-      <input id="client-id" placeholder="xxxxxxxx.apps.googleusercontent.com" autocomplete="off" autocapitalize="off" spellcheck="false">
-      <button class="btn primary big" type="submit">Save</button>
-    </form>
-    <p class="muted small">Just want to try it? <a href="?demo">Open the demo</a> (fake camera, nothing saved).</p>
+<!-- ============ WELCOME ============ -->
+<section id="onboard" class="screen" hidden>
+  <div class="wrap onboard">
+    <div class="ob-ball"><span class="ball xl"></span></div>
+    <h1 class="display">Rally<br><span class="accent">Reel</span></h1>
+    <p class="lead">Film your volleyball games. Get edited highlights with one tap. Film with friends for highlights from every angle.</p>
+    <div class="ob-points">
+      <div><i class="ic">☁</i><span>Videos go to <b>your Google Drive</b>, not your phone storage</span></div>
+      <div><i class="ic">✨</i><span>Finds the best rallies by itself</span></div>
+      <div><i class="ic">👥</i><span>Rooms: everyone films, one highlight from all angles</span></div>
+    </div>
+    <label class="field"><span>Your name</span>
+      <input id="ob-name" maxlength="20" placeholder="e.g. Kia" autocomplete="given-name"></label>
+    <button id="ob-go" class="btn primary big">Let's go</button>
+    <p class="muted small center-t">Just looking? <a href="?demo">Try the demo</a> – fake camera, nothing saved.</p>
   </div>
 </section>
 
-<!-- home -->
+<!-- ============ HOME ============ -->
 <section id="home" class="screen" hidden>
   <div class="wrap">
     <header class="top">
-      <h1 class="logo"><span class="ball"></span>Rally Reel</h1>
-      <span class="demo-tag">DEMO</span>
+      <div class="logo"><span class="ball"></span>Rally Reel <span class="demo-tag">DEMO</span></div>
+      <button id="me-btn" class="avatar" aria-label="Settings"></button>
     </header>
 
-    <div id="connect-card" class="card connect" hidden>
-      <div class="card-title">Connect Google Drive</div>
-      <p class="muted">Your games are saved to a <b>Volleyball Highlights</b> folder in your Drive – not on your phone.</p>
-      <button id="connect" class="btn primary big">Connect Google Drive</button>
+    <div id="connect-card" class="card glow-card" hidden>
+      <div class="cc-icon">☁</div>
+      <div class="cc-text"><b>Connect Google Drive</b><span>Your games are saved in a <i>Volleyball Highlights</i> folder in your Drive.</span></div>
+      <button id="connect" class="btn primary">Connect</button>
     </div>
 
-    <button id="record-btn" class="record-cta" disabled>
-      <span class="dot"></span>
-      <span><b>Record a game</b><small>Saves straight to Google Drive</small></span>
-    </button>
+    <section class="hero">
+      <p class="eyebrow" id="hello">Hey 👋</p>
+      <h1 class="display sm">Ready for the<br>next game?</h1>
+      <button id="rec-solo" class="mega" aria-label="Record a game">
+        <span class="mega-ring"></span><span class="mega-core"><svg viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h7A2.5 2.5 0 0 1 16 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 4 16.5v-9Zm13 3.2 3.4-2.3c.7-.5 1.6 0 1.6.8v7.6c0 .8-.9 1.3-1.6.8L17 15.3v-4.6Z"/></svg></span>
+      </button>
+      <p class="mega-label">Record a game</p>
+    </section>
 
-    <h2>Your games</h2>
+    <div class="tiles">
+      <button class="tile t1" id="t-create"><span class="t-ic"><svg viewBox="0 0 24 24"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2 19c0-3.3 3.1-6 7-6s7 2.7 7 6v1H2v-1Zm15.5 1v-1c0-1.9-.8-3.6-2.1-4.9 3.6-.4 6.6 1.9 6.6 4.9v1h-4.5Z"/></svg></span><b>Create room</b><small>Film with friends</small></button>
+      <button class="tile t2" id="t-join"><span class="t-ic"><svg viewBox="0 0 24 24"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4v-2h4V6h-4V4Zm-3.6 3.4L15 12l-4.6 4.6L9 15.2l2.2-2.2H3v-2h8.2L9 8.8l1.4-1.4Z"/></svg></span><b>Join room</b><small>Got a code?</small></button>
+      <button class="tile t3" id="t-upload"><span class="t-ic"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Zm4.5 4.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM6 18h12l-4-5.5-3 4-2-2.5L6 18Z"/></svg></span><b>Upload</b><small>From your gallery</small></button>
+      <button class="tile t4" id="t-settings"><span class="t-ic"><svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm8.6-2.3 1.9 1.5-2 3.5-2.3-.9a8 8 0 0 1-2 1.2l-.3 2.5h-4l-.4-2.5a8 8 0 0 1-2-1.2l-2.3.9-2-3.5 2-1.5a8 8 0 0 1 0-2.4l-2-1.5 2-3.5 2.3.9a8 8 0 0 1 2-1.2L10 1h4l.3 2.5a8 8 0 0 1 2 1.2l2.4-.9 2 3.5-2 1.5a8 8 0 0 1 0 2.4Z"/></svg></span><b>Settings</b><small>Length, quality</small></button>
+    </div>
+
+    <div class="section-h"><h2>Your games</h2><button id="refresh" class="link-btn">Refresh</button></div>
     <div id="list"></div>
-
-    <details class="settings">
-      <summary>Settings</summary>
-      <div class="row"><span>Highlight video length</span>
-        <div class="seg"><button data-len="60">1 min</button><button data-len="120">2 min</button><button data-len="240">4 min</button></div>
-      </div>
-      <div class="row"><span>Recording quality</span>
-        <div class="seg"><button data-q="720">720p</button><button data-q="1080">1080p</button></div>
-      </div>
-      <p class="muted small">720p uses ≈1.6 GB of Drive per hour, 1080p ≈2.7 GB. Free Google Drive has 15 GB – use "⋯ → Free up space" after making highlights.</p>
-      <button id="reset-client" class="btn ghost small">Change Google Client ID</button>
-    </details>
   </div>
 </section>
 
-<!-- camera -->
+<!-- ============ ROOM ============ -->
+<section id="room" class="screen" hidden>
+  <div class="wrap">
+    <header class="top">
+      <button id="room-back" class="icon-btn" aria-label="Back">‹</button>
+      <div class="room-title"><small>ROOM</small><b id="room-name">Game</b></div>
+      <button id="room-leave" class="link-btn">Leave</button>
+    </header>
+
+    <div class="code-card">
+      <div class="code-l"><small>Room code</small><div id="room-code" class="code"></div></div>
+      <div class="code-btns">
+        <button id="room-invite" class="btn primary">Invite</button>
+        <button id="room-qr-btn" class="btn">QR</button>
+      </div>
+      <div id="room-qr" class="qr" hidden></div>
+      <p class="muted small">Friends open the invite link (or scan the QR), connect their Google Drive and tap Record. Everyone's video stays in their own Drive.</p>
+    </div>
+
+    <div class="section-h"><h2>People</h2><span id="room-count" class="pill-count">0</span></div>
+    <div id="room-members" class="members"></div>
+
+    <div class="room-actions">
+      <button id="room-rec" class="btn rec big"><span class="dot"></span>Record from my phone</button>
+      <button id="room-upload" class="btn big">Add videos from gallery</button>
+    </div>
+
+    <div class="section-h"><h2>Footage</h2></div>
+    <div id="room-recs" class="recs"><p class="muted">No footage yet.</p></div>
+
+    <button id="room-make" class="btn magic big" disabled>✨ Make multi-angle highlights</button>
+
+    <div class="section-h"><h2>Highlights</h2></div>
+    <div id="room-reels"><p class="muted small">Highlights anyone makes show up here for everyone.</p></div>
+  </div>
+</section>
+
+<!-- ============ CAMERA ============ -->
 <section id="record" class="screen cam" hidden>
   <video id="preview" playsinline muted autoplay></video>
   <button id="reauth" class="reauth" hidden>⚠ Google sign-in expired – tap to keep saving</button>
 
   <div id="rec-idle" class="cam-ui">
-    <div class="cam-top"><button id="rec-back" class="pill">✕</button><span class="pill muted-pill">Turn phone sideways · point at the court</span></div>
-    <div class="cam-bottom"><button id="rec-start" class="shutter" aria-label="Start recording"><span></span></button></div>
+    <div class="cam-top"><button id="rec-back" class="pill">✕</button><span class="pill soft" id="rec-hint">Turn your phone sideways · point at the court</span></div>
+    <div class="cam-bottom"><div class="side-btn ghosty"></div><button id="rec-start" class="shutter" aria-label="Start recording"><span></span></button><div class="side-btn ghosty"></div></div>
   </div>
 
   <div id="rec-live" class="cam-ui" hidden>
     <div class="cam-top">
       <span class="pill rec"><i></i><span id="rec-time">0:00</span></span>
       <span id="rec-cloud" class="pill">☁ connecting…</span>
+      <span id="rec-room" class="pill room-pill" hidden></span>
     </div>
     <div class="cam-bottom">
       <button id="rec-mark" class="side-btn" aria-label="Mark a great play">★<small>Great play</small></button>
@@ -95,34 +141,46 @@
   </div>
 </section>
 
-<!-- after recording -->
+<!-- ============ SAVED ============ -->
 <section id="done" class="screen" hidden>
   <div class="wrap center">
     <div class="big-check">✓</div>
     <h1>Saved!</h1>
     <p id="done-msg" class="muted"></p>
-    <button id="done-make" class="btn primary big">✨ Make Highlights</button>
+    <button id="done-make" class="btn magic big">✨ Make Highlights</button>
     <button id="done-home" class="btn ghost">Later</button>
   </div>
 </section>
 
-<!-- editing -->
+<!-- ============ UPLOADING FROM GALLERY ============ -->
+<section id="import" class="screen" hidden>
+  <div class="wrap">
+    <h1>Uploading</h1>
+    <p class="muted" id="imp-sub">Keep this screen open – videos go to your Google Drive and get checked for rallies.</p>
+    <div id="imp-list" class="imp-list"></div>
+    <div class="actions"><button id="imp-done" class="btn primary big" hidden>Done</button><button id="imp-stop" class="btn ghost">Stop</button></div>
+  </div>
+</section>
+
+<!-- ============ EDITING ============ -->
 <section id="edit" class="screen" hidden>
   <div class="wrap">
     <div id="edit-working">
+      <p class="eyebrow">Editing</p>
       <h1>Making your highlights</h1>
       <p id="edit-msg" class="muted">Starting…</p>
-      <canvas id="edit-canvas" class="preview-canvas" width="1280" height="720"></canvas>
+      <div class="stage"><canvas id="edit-canvas" class="preview" width="1280" height="720"></canvas><div class="stage-shine"></div></div>
       <div class="bar"><div id="edit-bar"></div></div>
-      <p class="muted small">The editor plays your best rallies into a new video in real time, so it takes about as long as the highlight video. Keep the screen on.</p>
+      <p class="muted small">The editor plays your best rallies into a new video in real time, so it takes about as long as the video. Keep the screen on.</p>
       <button id="edit-cancel" class="btn ghost small">Stop</button>
     </div>
     <div id="edit-result" hidden>
-      <h1>Your highlights 🏐</h1>
+      <p class="eyebrow">Done 🏐</p>
+      <h1>Your highlights</h1>
       <p id="result-msg" class="muted"></p>
-      <video id="edit-video" class="preview-canvas" controls playsinline></video>
+      <video id="edit-video" class="preview" controls playsinline></video>
       <div class="actions">
-        <a id="open-drive" class="btn primary" target="_blank" rel="noopener">Open in Google Drive</a>
+        <a id="open-drive" class="btn primary" target="_blank" rel="noopener">Open in Drive</a>
         <button id="share" class="btn">Share…</button>
         <button id="edit-done" class="btn ghost">Done</button>
       </div>
@@ -130,6 +188,11 @@
   </div>
 </section>
 
+<!-- bottom sheet -->
+<div id="sheet-bg" class="sheet-bg" hidden></div>
+<div id="sheet" class="sheet" hidden><div class="sheet-grab"></div><div id="sheet-body"></div></div>
+
+<input id="file-pick" type="file" accept="video/*" multiple hidden>
 <div id="toast" class="toast" hidden></div>
 <script type="module" src="app.js"></script>
 </body>

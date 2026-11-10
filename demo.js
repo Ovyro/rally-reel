@@ -47,29 +47,33 @@ export function createDemoStream() {
     s.connect(f).connect(gn).connect(dest); s.start(t); s.stop(t + 3);
   }
 
-  // match script: rally → whistle → cheer → rest, forever
-  let phase = null;
-  const hitsVis = []; // [time, side]
-  let nextT = ac.currentTime + 1.5;
+  // Match script, driven by the wall clock so two demo "phones" (two tabs) see the
+  // SAME match at the same moments: every 20 s slot holds one rally → whistle → cheer.
+  const rnd = (k) => { const x = Math.sin(k * 12.9898) * 43758.5453; return x - Math.floor(x); };
+  const SLOT = 20;
+  const hitsVis = []; // [acTime, side]
+  let phases = [];
+  let nextSlot = Math.floor(Date.now() / 1000 / SLOT);
   function plan() {
-    const now = ac.currentTime;
-    while (nextT < now + 2) {
-      const len = 4 + Math.random() * 10;
-      const start = nextT;
-      let t = start, side = 0;
-      while (t < start + len) { hit(t); hitsVis.push([t, side]); side ^= 1; t += 0.8 + Math.random() * 0.6; }
-      const end = t;
-      whistle(end + 0.2);
-      cheer(end + 0.5, Math.min(1, 0.35 + len / 14 + Math.random() * 0.2));
-      phase = { start, end };
-      const wall = (x) => Date.now() + (x - ac.currentTime) * 1000;
-      (window.__demoRallies || (window.__demoRallies = [])).push({ start: wall(start), end: wall(end) });
-      nextT = end + 4 + Math.random() * 3;
-      (phases || (phases = [])).push(phase);
+    const wallNow = Date.now() / 1000, acNow = ac.currentTime;
+    const toAc = (w) => acNow + (w - wallNow);
+    while (nextSlot * SLOT < wallNow + 3) {
+      const k = nextSlot++;
+      const len = 4 + rnd(k) * 10;
+      const startW = k * SLOT + 1.5;
+      let tw = startW, side = 0, j = 0;
+      const hitsW = [];
+      while (tw < startW + len) { hitsW.push([tw, side]); side ^= 1; tw += 0.8 + rnd(k * 31 + j++) * 0.6; }
+      const endW = tw;
+      for (const [w, s] of hitsW) { const t = toAc(w); if (t > acNow) hit(t); hitsVis.push([t, s]); }
+      if (toAc(endW + 0.2) > acNow) whistle(toAc(endW + 0.2));
+      if (toAc(endW + 0.5) > acNow) cheer(toAc(endW + 0.5), Math.min(1, 0.35 + len / 14 + rnd(k * 7) * 0.2));
+      phases.push({ start: toAc(startW), end: toAc(endW) });
+      (window.__demoRallies || (window.__demoRallies = [])).push({ start: startW * 1000, end: endW * 1000 });
     }
   }
-  let phases = [];
   const planTimer = setInterval(plan, 200); plan();
+  const camB = /[?&]device=b/i.test(location.search);
 
   const players = [];
   for (let s = 0; s < 2; s++) for (let k = 0; k < 4; k++) players.push({ s, k, x: 0, y: 0, ph: Math.random() * 6 });
@@ -77,7 +81,9 @@ export function createDemoStream() {
   function draw() {
     const t = ac.currentTime;
     const live = phases.some((p) => t >= p.start - 0.2 && t <= p.end + 0.3);
-    g.fillStyle = '#26354f'; g.fillRect(0, 0, W, H);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = camB ? '#3b2a4f' : '#26354f'; g.fillRect(0, 0, W, H);
+    if (camB) g.setTransform(-1.18, 0, 0, 1.18, W + 110, -90); // second phone: other side of the court, closer
     g.fillStyle = '#d9824a'; g.fillRect(140, 330, 1000, 320);
     g.strokeStyle = '#fff'; g.lineWidth = 5; g.strokeRect(140, 330, 1000, 320);
     g.fillStyle = '#ddd'; g.fillRect(636, 230, 8, 420);
@@ -99,9 +105,10 @@ export function createDemoStream() {
       const x = x0 + (x1 - x0) * u, y = 380 - Math.sin(u * Math.PI) * 260;
       g.fillStyle = '#ffe14d'; g.beginPath(); g.arc(x, y, 16, 0, 7); g.fill();
     }
+    g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(0, 0, W, 44);
     g.fillStyle = '#fff'; g.font = '600 22px system-ui, sans-serif';
-    g.fillText('DEMO CAMERA · fake match', 16, 30);
+    g.fillText(`DEMO CAMERA ${camB ? 'B' : 'A'} · fake match`, 16, 30);
     while (hitsVis.length > 60) hitsVis.shift();
     while (phases.length > 10) phases.shift();
   }

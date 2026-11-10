@@ -21,17 +21,19 @@ export class LiveAnalyzer {
   }
 
   // Call straight from a tap (phones only allow audio to start from a tap).
-  prime() {
+  prime(ctx) {
     const AC = window.AudioContext || window.webkitAudioContext;
-    this.ctx = new AC();
+    this.ownCtx = !ctx;
+    this.ctx = ctx || new AC();
     if (this.ctx.resume) this.ctx.resume();
   }
 
-  start(clock) {
+  // rate > 1 when scanning a gallery video faster than real time
+  start(clock, { rate = 1, sourceNode = null } = {}) {
     this.clock = clock;
     const ctx = this.ctx;
-    if (this.stream.getAudioTracks().length) {
-      const src = ctx.createMediaStreamSource(this.stream);
+    if (sourceNode || (this.stream && this.stream.getAudioTracks().length)) {
+      const src = sourceNode || ctx.createMediaStreamSource(this.stream);
       const an = ctx.createAnalyser();
       an.fftSize = 2048;
       an.smoothingTimeConstant = 0;
@@ -55,8 +57,8 @@ export class LiveAnalyzer {
     this.mctx = this.mc.getContext('2d', { willReadFrequently: true });
     this.prevFrame = null;
     this.lastMotion = 0;
-    this.fast = setInterval(() => this._audioTick(), 40);
-    this.slow = setInterval(() => this._binTick(), DT * 1000);
+    this.fast = setInterval(() => this._audioTick(), Math.max(8, 40 / rate));
+    this.slow = setInterval(() => this._binTick(), (DT * 1000) / rate);
   }
 
   _audioTick() {
@@ -124,6 +126,6 @@ export class LiveAnalyzer {
 
   stop() {
     clearInterval(this.fast); clearInterval(this.slow);
-    try { this.ctx && this.ctx.close(); } catch { /* ignore */ }
+    try { if (this.ownCtx && this.ctx) this.ctx.close(); } catch { /* ignore */ }
   }
 }

@@ -39,7 +39,7 @@ export class GoogleDrive {
       error_callback: (e) => this._onToken({ error: (e && e.type) || 'popup_failed' }),
     });
     try {
-      const s = JSON.parse(sessionStorage.getItem('rr_tok') || 'null');
+      const s = JSON.parse(localStorage.getItem('rr_tok') || 'null');
       if (s && s.expires > Date.now() + 120000) { this.token = s.token; this.expires = s.expires; }
     } catch { /* ignore */ }
   }
@@ -59,7 +59,7 @@ export class GoogleDrive {
     if (!r || r.error) { w.forEach((x) => x.rej(new Error((r && r.error) || 'sign-in failed'))); return; }
     this.token = r.access_token;
     this.expires = Date.now() + (Number(r.expires_in) || 3599) * 1000;
-    try { sessionStorage.setItem('rr_tok', JSON.stringify({ token: this.token, expires: this.expires })); } catch { /* ignore */ }
+    try { localStorage.setItem('rr_tok', JSON.stringify({ token: this.token, expires: this.expires })); } catch { /* ignore */ }
     w.forEach((x) => x.res());
   }
 
@@ -160,6 +160,59 @@ export class GoogleDrive {
     });
   }
 
+  // "Anyone with the link can view" – needed so phones in the same room can play each
+  // other's clips. Files inside a shared folder inherit it.
+  async makePublic(id) {
+    await this._json(`${API}/files/${id}/permissions?fields=id`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'reader', type: 'anyone', allowFileDiscovery: false }),
+    });
+  }
+
+  // URL that streams a link-shared file (works in <video>/<img>, supports seeking)
+  publicUrl(id) {
+    const key = window.RR_CONFIG && window.RR_CONFIG.driveApiKey;
+    return `${API}/files/${id}?alt=media&key=${key}`;
+  }
+
+  // Download a file: as a link-shared file first, then with our own sign-in.
+  async fetchBlob(id) {
+    try {
+      const r = await fetch(this.publicUrl(id));
+      if (r.ok) return r.blob();
+    } catch { /* fall through */ }
+    return this.download(id);
+  }
+
+  async fetchJson(id) { return JSON.parse(await (await this.fetchBlob(id)).text()); }
+
+  async uploadThumb(blob, parent) {
+    const uri = await this.createSession('thumb.jpg', parent, 'image/jpeg');
+    return this.putBlob(uri, blob);
+  }
+
+  // Upload a big file (from the gallery) in 8 MB pieces without loading it into memory.
+  async uploadFile(file, name, parent, mime, onProgress, shouldStop) {
+    const uri = await this.createSession(name, parent, mime);
+    const CH = 8 * 1024 * 1024;
+    let pos = 0, res = null;
+    while (pos < file.size || (file.size === 0 && !res)) {
+      if (shouldStop && shouldStop()) throw new Error('Stopped.');
+      const end = Math.min(file.size, pos + CH);
+      const part = file.slice(pos, end);
+      for (let a = 0; ; a++) {
+        try { res = await this.putChunk(uri, part, pos, end >= file.size ? file.size : '*'); break; } catch (e) {
+          if (a >= 6) throw e;
+          await sleep(2000 * (a + 1));
+        }
+      }
+      pos = end;
+      onProgress && onProgress(pos / Math.max(1, file.size));
+      if (file.size === 0) break;
+    }
+    return res;
+  }
+
   viewLink(file) { return file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`; }
 }
 
@@ -237,5 +290,15 @@ export class MockDrive {
   async downloadJson(id) { return JSON.parse(await this.files.get(id).blob.text()); }
   async uploadJson(name, parent, obj) { return this._mk(name, parent, 'application/json', new Blob([JSON.stringify(obj)])); }
   async trash(id) { const f = this.files.get(id); if (f) f.trashed = true; }
+  async makePublic() {}
+  publicUrl(id) { const f = this.files.get(id); if (!f) return ''; if (!f.url) f.url = URL.createObjectURL(f.blob); return f.url; }
+  async fetchBlob(id) { return this.download(id); }
+  async fetchJson(id) { return this.downloadJson(id); }
+  async uploadThumb(blob, parent) { return this._mk('thumb.jpg', parent, 'image/jpeg', blob); }
+  async uploadFile(file, name, parent, mime, onProgress) {
+    for (let p = 0.1; p < 1; p += 0.15) { onProgress && onProgress(p); await sleep(120); }
+    onProgress && onProgress(1);
+    return this._mk(name, parent, mime, file);
+  }
   viewLink() { return null; }
 }

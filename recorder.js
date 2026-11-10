@@ -73,22 +73,39 @@ export class Recorder {
     this.analyzer.prime();
   }
 
-  start(folderName) {
+  // opts: { startMs (shared clock), room: {code, ...}, who, onFolder(id) }
+  start(folderName, opts = {}) {
     this.mime = pickMime();
     this.baseMime = this.mime.split(';')[0];
     this.ext = this.baseMime.includes('mp4') ? 'mp4' : 'webm';
     this.folderName = folderName;
+    this.opts = opts;
     this.folderP = (async () => {
       for (let a = 0; ; a++) {
         try {
           if (!this.drive.valid) { this.ui.onNeedAuth(true); await sleep(3000); continue; }
-          return await this.drive.createFolder(folderName, await this.drive.root());
+          const id = await this.drive.createFolder(folderName, await this.drive.root());
+          // link-share the folder so room-mates' phones can play these clips
+          this.drive.makePublic(id).catch(() => {});
+          return id;
         } catch (e) { await sleep(Math.min(20000, 1000 * 2 ** a)); }
       }
     })();
-    this.folderP.then((id) => { this.folderId = id; });
+    this.folderP.then((id) => {
+      this.folderId = id;
+      opts.onFolder && opts.onFolder(id);
+      // small preview picture for the game card
+      setTimeout(async () => {
+        try {
+          const { snapshot } = await import('./importer.js');
+          const b = await snapshot(this.video);
+          if (b) await this.drive.uploadThumb(b, id);
+        } catch { /* no thumbnail */ }
+      }, 1500);
+    });
     this.meta = {
-      v: 1, app: 'rally-reel', name: folderName, created: new Date().toISOString(),
+      v: 2, app: 'rally-reel', kind: 'live', name: folderName, created: new Date().toISOString(),
+      startMs: opts.startMs || Date.now(), who: opts.who || '', room: opts.room ? opts.room.code : null,
       mime: this.baseMime, ext: this.ext, segSec: SEG_SEC, segments: [], marks: [],
     };
     this.t0 = performance.now();
@@ -140,9 +157,10 @@ export class Recorder {
 
   _enqueue(seg, blob) {
     const r = (x) => Math.round(x * 1000) / 1000;
-    this.meta.segments.push({ i: seg.i, t0: r(seg.t0), t1: r(seg.t1) });
+    const entry = { i: seg.i, t0: r(seg.t0), t1: r(seg.t1) };
+    this.meta.segments.push(entry);
     if (!blob.size) return;
-    this.queue.push({ seg, blob });
+    this.queue.push({ seg, blob, entry });
     this.queuedBytes += blob.size;
     this._status();
     this._pump();
@@ -164,13 +182,14 @@ export class Recorder {
     return this.drive.createSession(name, folder, mime);
   }
 
-  async _upload({ seg, blob }) {
+  async _upload({ seg, blob, entry }) {
     const name = clipName(seg.i, this.ext);
     for (let a = 0; ; a++) {
       try {
         const uri = await this._sessionFor(name, this.baseMime);
         if (!uri) { this.ui.onNeedAuth(true); await sleep(3000); a = 0; continue; }
-        await this.drive.putBlob(uri, blob);
+        const f = await this.drive.putBlob(uri, blob);
+        if (f && f.id) entry.id = f.id;
         this.pool.delete(name);
         this.uploaded++;
         this.queuedBytes -= blob.size;
@@ -217,8 +236,9 @@ export class Recorder {
       const v = ++this.metaVersion;
       const uri = await this._sessionFor(metaName(v), 'application/json');
       if (!uri) return;
-      await this.drive.putBlob(uri, new Blob([JSON.stringify(this.snapshot())], { type: 'application/json' }));
+      const f = await this.drive.putBlob(uri, new Blob([JSON.stringify(this.snapshot())], { type: 'application/json' }));
       this.pool.delete(metaName(v));
+      if (f && f.id && this.opts.onMeta) this.opts.onMeta(f.id, this.snapshot(), false);
     } catch { /* next backup will try again */ }
   }
 
@@ -245,13 +265,15 @@ export class Recorder {
     snap.duration = Math.round(this.meta.duration * 100) / 100;
     snap.complete = true;
     const folder = await this.folderP;
+    let metaId = null;
     for (let a = 0; a < 20; a++) {
       try {
         if (!this.drive.valid) { this.ui.onNeedAuth(true); await sleep(3000); continue; }
-        await this.drive.uploadJson('meta.json', folder, snap);
+        metaId = (await this.drive.uploadJson('meta.json', folder, snap)).id;
         break;
       } catch { await sleep(2000); }
     }
+    if (metaId && this.opts.onMeta) await this.opts.onMeta(metaId, snap, true);
     this.ui.onNeedAuth(false);
     return { folderId: folder, meta: snap };
   }
