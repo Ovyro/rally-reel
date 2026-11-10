@@ -1,9 +1,9 @@
-import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=6';
-import { Recorder, pickMime } from './recorder.js?v=6';
-import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=6';
-import { renderReel, makePlayers } from './renderer.js?v=6';
-import { analyzeFile, guessMime } from './importer.js?v=6';
-import * as R from './rooms.js?v=6';
+import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=7';
+import { Recorder, pickMime } from './recorder.js?v=7';
+import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=7';
+import { renderReel, makePlayers } from './renderer.js?v=7';
+import { analyzeFile, guessMime } from './importer.js?v=7';
+import * as R from './rooms.js?v=7';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -446,7 +446,11 @@ $('#rec-back').addEventListener('click', () => {
 
 // ----- start together -----
 let amReady = false, primed = false, syncStartAt = 0, syncTimer = null;
-const present = () => (roomState ? roomState.members.filter((m) => { const c = memberStatus(m)[0]; return c === 'on' || c === 'live'; }) : []);
+// people in the room right now (this phone always counts itself)
+const present = () => (roomState ? roomState.members.filter((m) => {
+  if (m.id === R.memberKey()) return true;
+  const c = memberStatus(m)[0]; return c === 'on' || c === 'live';
+}) : []);
 
 $('#rec-ready').addEventListener('click', () => {
   if (!recorder || !recorder.stream || !recRoom) return;
@@ -496,7 +500,8 @@ function runCountdown() {
     if (left <= 0) {
       clearInterval(syncTimer);
       $('#countdown').hidden = true;
-      if (left > -15000) startRecording(syncStartAt); else syncStartAt = 0;
+      // record the real moment we started (the editor lines the phones up from this)
+      startRecording(R.now());
       return;
     }
     $('#countdown').hidden = false;

@@ -121,10 +121,12 @@ export function watchRoom(code, cb) {
   const offs = [];
   const state = { members: [], recordings: [], reels: [], room: null };
   const emit = () => cb({ ...state });
-  offs.push(fs.onSnapshot(fs.doc(db, 'rooms', code), (s) => { state.room = s.exists() ? { code, ...s.data() } : null; emit(); }));
+  // 'estimate': a time this phone just wrote shows up right away (not as "unknown")
+  const EST = { serverTimestamps: 'estimate' };
+  offs.push(fs.onSnapshot(fs.doc(db, 'rooms', code), (s) => { state.room = s.exists() ? { code, ...s.data(EST) } : null; emit(); }));
   for (const col of ['members', 'recordings', 'reels']) {
     offs.push(fs.onSnapshot(fs.collection(db, 'rooms', code, col), (qs) => {
-      state[col] = qs.docs.map((d) => ({ id: d.id, ...d.data() }));
+      state[col] = qs.docs.map((d) => ({ id: d.id, ...d.data(EST) }));
       emit();
     }, () => {}));
   }
