@@ -1,9 +1,9 @@
-import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=8';
-import { Recorder, pickMime } from './recorder.js?v=8';
-import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=8';
-import { renderReel, makePlayers } from './renderer.js?v=8';
-import { analyzeFile, guessMime } from './importer.js?v=8';
-import * as R from './rooms.js?v=8';
+import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=9';
+import { Recorder, pickMime } from './recorder.js?v=9';
+import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=9';
+import { renderReel, makePlayers } from './renderer.js?v=9';
+import { analyzeFile, guessMime } from './importer.js?v=9';
+import * as R from './rooms.js?v=9';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -35,7 +35,7 @@ document.querySelectorAll('#tabbar button').forEach((b) => b.addEventListener('c
   if (b.dataset.tab === 'home') { goHome(); return; }
   show('positions');
   try {
-    if (!positionsMod) positionsMod = await import('./positions.js?v=8');
+    if (!positionsMod) positionsMod = await import('./positions.js?v=9');
     positionsMod.mount($('#pos-root'));
   } catch (e) { $('#pos-root').textContent = 'Could not load: ' + e.message; }
 }));

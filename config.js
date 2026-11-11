@@ -3,6 +3,8 @@ window.RR_CONFIG = {
   // Google sign-in (saving videos to each person's own Google Drive)
   clientId: '358032782648-ens36eqm2bq33hqh19ef09jp3d24ivo9.apps.googleusercontent.com',
   // Lets phones in a room play each other's clips (restricted to Google Drive + this website)
+  // Home-screen (installed) apps sign in with a full-page redirect (address registered in Google Cloud)
+  redirectSignIn: true,
   driveApiKey: 'AIzaSyDhkmsQVL5Q6-XDoa1jYy_b0OyYk8FyARI',
   // Rooms database (Firebase / Firestore, free plan)
   firebase: {
