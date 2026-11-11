@@ -1,9 +1,9 @@
-import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=13';
-import { Recorder, pickMime } from './recorder.js?v=13';
-import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=13';
-import { renderReel, makePlayers } from './renderer.js?v=13';
-import { analyzeFile, guessMime } from './importer.js?v=13';
-import * as R from './rooms.js?v=13';
+import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=14';
+import { Recorder, pickMime } from './recorder.js?v=14';
+import { detectHighlights, buildMultiPlan, alignRecordings, planSeconds } from './highlights.js?v=14';
+import { renderReel, makePlayers } from './renderer.js?v=14';
+import { analyzeFile, guessMime } from './importer.js?v=14';
+import * as R from './rooms.js?v=14';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -35,7 +35,7 @@ document.querySelectorAll('#tabbar button').forEach((b) => b.addEventListener('c
   if (b.dataset.tab === 'home') { goHome(); return; }
   show('positions');
   try {
-    if (!positionsMod) positionsMod = await import('./positions.js?v=13');
+    if (!positionsMod) positionsMod = await import('./positions.js?v=14');
     positionsMod.mount($('#pos-root'));
   } catch (e) { $('#pos-root').textContent = 'Could not load: ' + e.message; }
 }));
@@ -1065,7 +1065,7 @@ async function makeHighlights(target) {
     $('#open-drive').hidden = !link;
     if (link) $('#open-drive').href = link;
     if (roomCode && file && file.id) {
-      await R.addReel(roomCode, { who: myName(), fileId: file.id, link, clips: clips.length, angles, seconds: Math.round(blob.size ? (v.duration || 0) : 0) || 0 }).catch(() => {});
+      await R.addReel(roomCode, { who: myName(), fileId: file.id, link, clips: clips.length, angles, seconds: Math.round(isFinite(v.duration) && v.duration > 0 ? v.duration : planSeconds(plan)) }).catch(() => {});
     }
     $('#share').onclick = async () => {
       const f = new File([blob], `Volleyball highlights.${ext}`, { type: base });
