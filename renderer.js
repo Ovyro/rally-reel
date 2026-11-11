@@ -2,7 +2,7 @@
 // camera-angle labels, fades, slow-motion replays from other phones and an outro,
 // and records the result as one new video that streams straight to Drive.
 
-import { planSeconds } from './highlights.js?v=12';
+import { planSeconds } from './highlights.js?v=13';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ease = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);

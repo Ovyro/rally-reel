@@ -1,7 +1,7 @@
 // Keeps the app itself (a few small files) available offline. Videos are never cached here.
-const CACHE = 'rally-reel-v12';
-const SHELL = ['./', 'styles.css?v=12', 'config.js?v=12', 'app.js?v=12', 'drive.js?v=12', 'recorder.js?v=12', 'analyzer.js?v=12',
-  'highlights.js?v=12', 'renderer.js?v=12', 'demo.js?v=12', 'importer.js?v=12', 'rooms.js?v=12', 'positions.js?v=12', 'privacy.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
+const CACHE = 'rally-reel-v13';
+const SHELL = ['./', 'styles.css?v=13', 'config.js?v=13', 'app.js?v=13', 'drive.js?v=13', 'recorder.js?v=13', 'analyzer.js?v=13',
+  'highlights.js?v=13', 'renderer.js?v=13', 'demo.js?v=13', 'importer.js?v=13', 'rooms.js?v=13', 'positions.js?v=13', 'privacy.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));

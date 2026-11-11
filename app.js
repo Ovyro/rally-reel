@@ -1,9 +1,9 @@
-import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=12';
-import { Recorder, pickMime } from './recorder.js?v=12';
-import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=12';
-import { renderReel, makePlayers } from './renderer.js?v=12';
-import { analyzeFile, guessMime } from './importer.js?v=12';
-import * as R from './rooms.js?v=12';
+import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=13';
+import { Recorder, pickMime } from './recorder.js?v=13';
+import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=13';
+import { renderReel, makePlayers } from './renderer.js?v=13';
+import { analyzeFile, guessMime } from './importer.js?v=13';
+import * as R from './rooms.js?v=13';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -35,7 +35,7 @@ document.querySelectorAll('#tabbar button').forEach((b) => b.addEventListener('c
   if (b.dataset.tab === 'home') { goHome(); return; }
   show('positions');
   try {
-    if (!positionsMod) positionsMod = await import('./positions.js?v=12');
+    if (!positionsMod) positionsMod = await import('./positions.js?v=13');
     positionsMod.mount($('#pos-root'));
   } catch (e) { $('#pos-root').textContent = 'Could not load: ' + e.message; }
 }));
@@ -451,7 +451,7 @@ async function enterRoom(code, join) {
     if (roomUnsub) roomUnsub();
     roomUnsub = R.watchRoom(code, (s) => { roomState = s; renderRoom(); });
     clearInterval(heartbeat);
-    heartbeat = setInterval(() => R.setMemberState(code, recorder && recorder.recording ? 'recording' : 'here'), 60000);
+    heartbeat = setInterval(() => R.setMemberState(code, recorder && recorder.recording ? 'recording' : 'here'), 20000);
   } catch (e) {
     toast(e.message || 'Could not open the room.', 6000);
     goHome();
@@ -498,8 +498,10 @@ function recLost(r) {
 
 function memberStatus(m) {
   const seen = m.seen && m.seen.toMillis ? m.seen.toMillis() : 0;
-  const fresh = R.now() - seen < 3 * 60 * 1000;
-  if (m.state === 'recording' && fresh) return ['live', 'Recording'];
+  const age = R.now() - seen;
+  const fresh = age < 3 * 60 * 1000;
+  // a filming phone checks in every 20 s – silent for a minute means its battery/connection died
+  if (m.state === 'recording') return age < 60 * 1000 ? ['live', 'Recording'] : ['', 'Disconnected'];
   if (m.state === 'left') return ['', 'Left'];
   if (fresh) return ['on', m.ready ? 'Ready ✓' : 'Here'];
   return ['', 'Away'];
@@ -956,6 +958,12 @@ async function makeHighlights(target) {
           // anything not cleanly finished: look in the folder for pieces uploaded after the last summary
           if (meta.kind !== 'file' && d.folderId && (d.status !== 'done' || !meta.complete || !meta.segments || meta.segments.some((s) => !s.id))) {
             try { files = await listFolderAny(d.folderId); } catch { files = null; }
+            // use the newest summary in the folder (a phone can die before telling the room about it)
+            const newest = files && (files.find((f) => f.name === 'meta.json') ||
+              files.filter((f) => /^meta_\d+\.json$/.test(f.name)).sort((a, b) => b.name.localeCompare(a.name))[0]);
+            if (newest && newest.id !== d.metaId) {
+              try { const m2 = await drive.fetchJson(newest.id); if ((m2.duration || 0) >= (meta.duration || 0)) meta = m2; } catch { /* keep the one we have */ }
+            }
           }
           const rec = recFromMeta('r' + k, d.who || '?', meta, files);
           // without a sound/motion summary this phone still gives camera angles, it just doesn't vote on rallies
