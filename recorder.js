@@ -2,9 +2,9 @@
 // the moment it's finished. Pieces live only in memory until uploaded, then are
 // dropped – nothing is written to the phone's storage.
 
-import { LiveAnalyzer } from './analyzer.js?v=7';
-import { createDemoStream } from './demo.js?v=7';
-import { sleep } from './drive.js?v=7';
+import { LiveAnalyzer } from './analyzer.js?v=8';
+import { createDemoStream } from './demo.js?v=8';
+import { sleep } from './drive.js?v=8';
 
 export const SEG_SEC = 10;
 const POOL_CLIPS = 400; // upload slots reserved ahead (~66 min) so long matches survive sign-in expiry
@@ -97,7 +97,7 @@ export class Recorder {
       // small preview picture for the game card
       setTimeout(async () => {
         try {
-          const { snapshot } = await import('./importer.js?v=7');
+          const { snapshot } = await import('./importer.js?v=8');
           const b = await snapshot(this.video);
           if (b) await this.drive.uploadThumb(b, id);
         } catch { /* no thumbnail */ }
@@ -131,28 +131,44 @@ export class Recorder {
   }
 
   _startSegment() {
-    const i = this.segIndex++;
+    const i = this.segIndex;
+    const mr = new MediaRecorder(this.stream, { mimeType: this.mime, videoBitsPerSecond: this.vbr, audioBitsPerSecond: 128000 });
     const seg = { i, t0: this.clock(), t1: null };
     const chunks = [];
-    const mr = new MediaRecorder(this.stream, { mimeType: this.mime, videoBitsPerSecond: this.vbr, audioBitsPerSecond: 128000 });
+    let done;
+    const stopped = new Promise((res) => { done = res; });
     mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    this.stops.push(new Promise((res) => {
-      mr.onstop = () => {
-        seg.t1 = this.clock();
-        this._enqueue(seg, new Blob(chunks, { type: this.baseMime }));
-        res();
-      };
-    }));
+    mr.onstop = () => {
+      seg.t1 = this.clock();
+      this._enqueue(seg, new Blob(chunks, { type: this.baseMime }));
+      done();
+    };
+    mr.onerror = () => { this.overlapOK = false; };
     mr.onstart = () => { seg.t0 = this.clock(); };
-    mr.start(1000);
+    mr.start(1000); // throws if this phone can't run another recorder right now
+    this.segIndex++;
+    this.stops.push(stopped);
     this.cur = mr;
   }
 
   // Start the next piece a moment BEFORE stopping the old one so no frame is lost.
+  // Phones that can't run two recorders at once fall back to stop-then-start.
   _rotate() {
     const old = this.cur;
-    this._startSegment();
-    setTimeout(() => { if (old.state !== 'inactive') old.stop(); }, 300);
+    if (this.overlapOK !== false && old && old.state !== 'inactive') {
+      try {
+        this._startSegment();
+        setTimeout(() => { if (old.state !== 'inactive') old.stop(); }, 300);
+        return;
+      } catch { this.overlapOK = false; }
+    }
+    const next = () => {
+      if (!this.recording) return;
+      try { this._startSegment(); } catch { setTimeout(next, 500); }
+    };
+    if (!old || old.state === 'inactive') { next(); return; }
+    old.addEventListener('stop', () => setTimeout(next, 0), { once: true });
+    old.stop();
   }
 
   _enqueue(seg, blob) {

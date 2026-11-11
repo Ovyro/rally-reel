@@ -2,8 +2,8 @@
 // pieces, never copied in memory) it's also scanned at high speed for rallies, the
 // same way live recordings are, so "Make Highlights" works on it too.
 
-import { LiveAnalyzer } from './analyzer.js?v=7';
-import { sleep } from './drive.js?v=7';
+import { LiveAnalyzer } from './analyzer.js?v=8';
+import { sleep } from './drive.js?v=8';
 
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 

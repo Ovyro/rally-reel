@@ -110,6 +110,12 @@ export async function setReady(code, on) {
     { uid, ready: !!on, readyAt: on ? fs.serverTimestamp() : null, state: 'here', seen: fs.serverTimestamp() }, { merge: true });
 }
 
+// Team lineups (names + positions) shared with the whole room.
+export async function setLineup(code, lineup) {
+  if (!code || !db) return;
+  await fs.setDoc(fs.doc(db, 'rooms', code, 'members', memberKey()), { uid, lineup, lineupAt: fs.serverTimestamp() }, { merge: true });
+}
+
 // Ask every phone in the room to stop recording.
 export async function requestStopAll(code) {
   if (!code || !db) return;

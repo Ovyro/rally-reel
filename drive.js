@@ -30,7 +30,36 @@ export class GoogleDrive {
     this.isMock = false;
   }
 
+  // Installed (home-screen) apps: Google's pop-up is unreliable there, use a full-page redirect.
+  get preferRedirect() {
+    if (!(window.RR_CONFIG && window.RR_CONFIG.redirectSignIn)) return false; // needs the redirect address registered with Google
+    return navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  }
+
+  redirectUri() { return new URL('./', location.href).href; }
+
+  signInRedirect(state = '') {
+    const q = new URLSearchParams({
+      client_id: this.clientId, redirect_uri: this.redirectUri(), response_type: 'token',
+      scope: 'https://www.googleapis.com/auth/drive.file', include_granted_scopes: 'true', state: state || '',
+    });
+    location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + q;
+  }
+
+  // Coming back from the redirect: the token is in the address (#access_token=…).
+  _readRedirect() {
+    if (!location.hash.includes('access_token=')) return;
+    const h = new URLSearchParams(location.hash.slice(1));
+    const tok = h.get('access_token');
+    if (tok) {
+      this._onToken({ access_token: tok, expires_in: h.get('expires_in') });
+      this.returnState = h.get('state') || '';
+    }
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+
   async init() {
+    this._readRedirect();
     await loadScript('https://accounts.google.com/gsi/client');
     this.tc = google.accounts.oauth2.initTokenClient({
       client_id: this.clientId,

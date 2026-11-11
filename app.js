@@ -1,9 +1,9 @@
-import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=7';
-import { Recorder, pickMime } from './recorder.js?v=7';
-import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=7';
-import { renderReel, makePlayers } from './renderer.js?v=7';
-import { analyzeFile, guessMime } from './importer.js?v=7';
-import * as R from './rooms.js?v=7';
+import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=8';
+import { Recorder, pickMime } from './recorder.js?v=8';
+import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=8';
+import { renderReel, makePlayers } from './renderer.js?v=8';
+import { analyzeFile, guessMime } from './importer.js?v=8';
+import * as R from './rooms.js?v=8';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -25,8 +25,20 @@ const myName = () => ((FAKECAM && params.get('as')) || localStorage.getItem('rr_
 // ---------- helpers ----------
 function show(id) {
   document.querySelectorAll('.screen').forEach((s) => { s.hidden = s.id !== id; });
+  const tabbed = id === 'home' || id === 'positions';
+  $('#tabbar').hidden = !tabbed;
+  document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === id));
   window.scrollTo(0, 0);
 }
+let positionsMod = null;
+document.querySelectorAll('#tabbar button').forEach((b) => b.addEventListener('click', async () => {
+  if (b.dataset.tab === 'home') { goHome(); return; }
+  show('positions');
+  try {
+    if (!positionsMod) positionsMod = await import('./positions.js?v=8');
+    positionsMod.mount($('#pos-root'));
+  } catch (e) { $('#pos-root').textContent = 'Could not load: ' + e.message; }
+}));
 let toastTimer;
 function toast(msg, ms = 3500) {
   const t = $('#toast');
@@ -39,12 +51,97 @@ const fmtTime = (s) => {
   return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0');
 };
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
-function hue(name) { let h = 0; for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
 function avatar(name, cls = 'avatar') {
-  const a = el('div', cls, (name || '?').trim().charAt(0).toUpperCase());
-  const h = hue(name);
-  a.style.background = `linear-gradient(135deg, hsl(${h} 85% 60%), hsl(${(h + 40) % 360} 80% 45%))`;
-  return a;
+  return el('div', cls, (name || '?').trim().charAt(0).toUpperCase());
+}
+
+// ---------- team lineups (shown at the start of the highlights) ----------
+export const POSITIONS = [
+  ['S', 'Setter'], ['OH', 'Outside Hitter'], ['OPP', 'Opposite'], ['MB', 'Middle Blocker'], ['L', 'Libero'], ['DS', 'Defensive Specialist'], ['', 'Other'],
+];
+function cleanLineup(l) {
+  if (!l || !Array.isArray(l.teams)) return null;
+  const teams = l.teams.map((t) => ({
+    name: String(t.name || '').trim().slice(0, 40),
+    players: (t.players || []).map((p) => ({ num: String(p.num || '').replace(/[^0-9]/g, '').slice(0, 3), name: String(p.name || '').trim().slice(0, 40), pos: String(p.pos || '') }))
+      .filter((p) => p.name),
+  })).filter((t) => t.name || t.players.length);
+  return teams.length ? { teams } : null;
+}
+function lastLineup() { try { return cleanLineup(JSON.parse(localStorage.getItem('rr_lineup') || 'null')); } catch { return null; } }
+
+// Opens the "Teams" sheet. Resolves with a lineup, null (skipped) or undefined (closed).
+function lineupSheet(initial, { title = 'Teams', skipLabel = 'Skip' } = {}) {
+  const data = { teams: [0, 1].map((i) => {
+    const t = (initial && initial.teams && initial.teams[i]) || {};
+    return { name: t.name || '', players: (t.players || []).map((p) => ({ ...p })) };
+  }) };
+  let cur = 0;
+  return sheet((b, close) => {
+    b.append(el('h3', '', title), el('p', 'muted small', 'Optional. Add one team or both — names and positions open your highlights like an official broadcast.'));
+    const tabs = el('div', 'team-tabs');
+    const body = el('div');
+    const renderTabs = () => {
+      tabs.replaceChildren(...data.teams.map((t, i) => {
+        const btn = el('button', i === cur ? 'on' : '');
+        btn.append(document.createTextNode(t.name || `Team ${i + 1}`), el('small', '', `${t.players.filter((p) => p.name).length} players`));
+        btn.onclick = () => { cur = i; renderTabs(); renderBody(); };
+        return btn;
+      }));
+    };
+    const renderBody = () => {
+      const t = data.teams[cur];
+      const nameIn = el('input'); nameIn.placeholder = `Team ${cur + 1} name`; nameIn.value = t.name; nameIn.maxLength = 40;
+      nameIn.oninput = () => { t.name = nameIn.value; renderTabs(); };
+      const f = el('label', 'field'); f.append(el('span', '', 'Team name'), nameIn);
+      const list = el('div', 'players');
+      const renderPlayers = () => {
+        if (!t.players.length) t.players.push({ num: '', name: '', pos: '' });
+        list.replaceChildren(...t.players.map((p, k) => {
+          const row = el('div', 'prow');
+          const num = el('input'); num.placeholder = '#'; num.inputMode = 'numeric'; num.value = p.num || ''; num.maxLength = 3;
+          num.oninput = () => { p.num = num.value; };
+          const nm = el('input'); nm.placeholder = 'Full name'; nm.value = p.name || ''; nm.maxLength = 40; nm.autocapitalize = 'words';
+          nm.oninput = () => { p.name = nm.value; renderTabs(); };
+          const pos = el('select');
+          pos.append(Object.assign(el('option', '', 'Position'), { value: '' }));
+          POSITIONS.filter(([a]) => a).forEach(([a, full]) => pos.append(Object.assign(el('option', '', full), { value: a })));
+          pos.value = p.pos || '';
+          pos.onchange = () => { p.pos = pos.value; };
+          const x = el('button', 'x', '×'); x.setAttribute('aria-label', 'Remove player');
+          x.onclick = () => { t.players.splice(k, 1); renderPlayers(); renderTabs(); };
+          row.append(num, nm, pos, x);
+          return row;
+        }));
+      };
+      renderPlayers();
+      const add = el('button', 'btn small add-player', '+ Add player');
+      add.onclick = () => { if (t.players.length < 16) { t.players.push({ num: '', name: '', pos: '' }); renderPlayers(); list.lastChild.querySelector('input:nth-child(2)').focus(); } };
+      body.replaceChildren(f, el('h2', '', 'Players'), list, add);
+    };
+    renderTabs(); renderBody();
+    const btns = el('div', 'btns');
+    const save = el('button', 'btn primary big', 'Save teams');
+    save.onclick = () => {
+      const l = cleanLineup(data);
+      if (l) try { localStorage.setItem('rr_lineup', JSON.stringify(l)); } catch { /* ignore */ }
+      close(l);
+    };
+    const skip = el('button', 'btn ghost big', skipLabel); skip.onclick = () => close(null);
+    btns.append(save, skip);
+    b.append(tabs, body, btns);
+  });
+}
+
+// Intro scenes for the highlight video.
+function introScenes(lineup) {
+  const l = cleanLineup(lineup);
+  if (!l) return [];
+  const out = [];
+  const named = l.teams.filter((t) => t.name);
+  if (named.length === 2) out.push({ type: 'matchup', dur: 2.6, teams: named.map((t) => t.name) });
+  for (const t of l.teams) if (t.players.length) out.push({ type: 'lineup', dur: Math.min(7, 2.6 + t.players.length * 0.28), team: t });
+  return out;
 }
 
 let wakeLock = null;
@@ -86,7 +183,7 @@ function confirmSheet(title, text, yes = 'Yes', danger = false) {
   return sheet((b, close) => {
     b.append(el('h3', '', title), el('p', 'muted', text));
     const btns = el('div', 'btns');
-    const y = el('button', danger ? 'btn rec big' : 'btn primary big', yes); y.onclick = () => close(true);
+    const y = el('button', 'btn primary big', yes); y.onclick = () => close(true);
     const n = el('button', 'btn ghost big', 'Cancel'); n.onclick = () => close(false);
     btns.append(y, n); b.append(btns);
   });
@@ -107,6 +204,7 @@ async function boot() {
     // test hook: run the gallery-upload flow on File objects
     importTest: (files, room) => { const AC = window.AudioContext || window.webkitAudioContext; return importFiles(files, { ac: new AC(), room: room || null }); },
   };
+  if (drive.returnState) pendingRoom = R.cleanCode(drive.returnState) || null; // back from Google sign-in
   if (!localStorage.getItem('rr_name') && !DEMO) { show('onboard'); return; }
   afterReady();
 }
@@ -133,6 +231,8 @@ $('#ob-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#ob
 // Run fn only when signed in to Google. If not, ask (inside the same tap).
 function needDrive(fn) {
   if (drive.valid) return fn();
+  // Home-screen apps on iPhone can't use Google's pop-up, so they sign in with a full-page redirect.
+  if (drive.preferRedirect) { drive.signInRedirect(pendingRoom); return; }
   drive.signIn('').then(() => { renderHome(); if (pendingRoom) { const c = pendingRoom; pendingRoom = null; enterRoom(c, true); } })
     .catch((e) => toast('Google sign-in did not finish: ' + e.message));
 }
@@ -141,8 +241,8 @@ function needDrive(fn) {
 function goHome() {
   show('home');
   const n = myName();
-  $('#hello').textContent = `Hey ${n} 👋`;
-  const av = avatar(n); $('#me-btn').textContent = av.textContent; $('#me-btn').style.background = av.style.background;
+  $('#hello').textContent = `Welcome, ${n}`;
+  $('#me-btn').textContent = n.charAt(0).toUpperCase();
   renderHome();
 }
 
@@ -167,7 +267,7 @@ async function renderHome() {
       .filter((f) => f.mimeType === FOLDER_MIME)
       .sort((a, b) => (b.createdTime || '').localeCompare(a.createdTime || ''));
     if (!folders.length) {
-      list.replaceChildren(Object.assign(el('div', 'empty'), { innerHTML: '<b>No games yet</b>Tap the big red button to film your first one, or upload videos from your gallery.' }));
+      list.replaceChildren(Object.assign(el('div', 'empty'), { innerHTML: '<b>No games yet</b>Tap “Record a game” to film your first one, or upload videos from your gallery.' }));
       return;
     }
     list.replaceChildren(...folders.map(gameCard));
@@ -183,7 +283,7 @@ function gameCard(folder) {
   const th = el('div', 'thumb');
   const body = el('div', 'game-body');
   const title = el('div', 'game-title', info.label ? info.label.replace(/ highlights$/, '') : 'Game');
-  if (info.code) title.append(el('span', 'room-chip', '👥 ROOM'));
+  if (info.code) title.append(el('span', 'room-chip', 'ROOM'));
   const meta = el('div', 'game-info', prettyDate(info.date));
   const sub = el('div', 'game-info', '…');
   const actions = el('div', 'game-actions');
@@ -198,37 +298,56 @@ function gameCard(folder) {
     const mb = (clips.reduce((a, f) => a + Number(f.size || 0), 0) + Number(video ? video.size || 0 : 0)) / 1048576;
     const size = mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : Math.round(mb) + ' MB';
     sub.textContent = clips.length ? `≈ ${fmtTime(clips.length * 10)} filmed · ${size}` : video ? `Uploaded video · ${size}` : reel ? 'Highlights' : 'Nothing saved';
-    if (reel) th.append(el('span', 'tag reel', '✓ HIGHLIGHTS'));
+    if (reel) th.append(el('span', 'tag reel', 'HIGHLIGHTS'));
     else if (clips.length || video) th.append(el('span', 'tag', clips.length ? 'RAW' : 'UPLOAD'));
     if (reel) {
       const link = drive.viewLink(reel);
-      if (link) { const a = el('a', 'btn primary', '▶ Watch'); a.href = link; a.target = '_blank'; a.rel = 'noopener'; actions.append(a); }
+      if (link) { const a = el('a', 'btn primary', 'Watch'); a.href = link; a.target = '_blank'; a.rel = 'noopener'; actions.append(a); }
     }
-    if (info.code && !DEMO) { const b = el('button', 'btn', '👥 Room'); b.onclick = () => enterRoom(info.code, true); actions.append(b); }
+    if (info.code && !DEMO) { const b = el('button', 'btn', 'Room'); b.onclick = () => enterRoom(info.code, true); actions.append(b); }
     if ((clips.length || video) && !info.label.endsWith('highlights')) {
-      const mk = el('button', reel ? 'btn' : 'btn magic', reel ? '↻ Remake' : '✨ Highlights');
+      const mk = el('button', reel ? 'btn' : 'btn primary', reel ? 'Remake' : 'Make highlights');
       mk.onclick = () => makeHighlights({ folder });
       actions.append(mk);
     }
-    const more = el('button', 'btn ghost', '⋯');
-    more.onclick = () => manage(folder, clips.concat(video ? [video] : []), reel);
+    const more = el('button', 'btn ghost', '•••');
+    more.onclick = () => manage(folder, clips.concat(video ? [video] : []), reel, files);
     actions.append(more);
   }).catch(() => { sub.textContent = 'could not load'; });
   return c;
 }
 
-async function manage(folder, raw, reel) {
+async function readLineup(files) {
+  const lf = files.filter((f) => f.name === 'lineup.json').sort((a, b) => (b.createdTime || '').localeCompare(a.createdTime || ''))[0];
+  if (lf) { try { return cleanLineup(await drive.fetchJson(lf.id)); } catch { /* fall through */ } }
+  return null;
+}
+
+async function manage(folder, raw, reel, files) {
   const choice = await sheet((b, close) => {
     b.append(el('h3', '', 'This game'));
     const btns = el('div', 'btns');
+    if (raw.length) { const t = el('button', 'btn big', 'Teams & lineups'); t.onclick = () => close('teams'); btns.append(t); }
     if (reel && raw.length) {
-      const f = el('button', 'btn big', `🧹 Free up space (remove ${raw.length} raw file${raw.length === 1 ? '' : 's'}, keep highlights)`);
+      const f = el('button', 'btn big', `Free up space — remove ${raw.length} raw file${raw.length === 1 ? '' : 's'}, keep highlights`);
       f.onclick = () => close('free'); btns.append(f);
     }
-    const d = el('button', 'btn rec big', '🗑 Delete this game'); d.onclick = () => close('delete');
+    const d = el('button', 'btn big', 'Delete this game'); d.onclick = () => close('delete');
     const x = el('button', 'btn ghost big', 'Cancel'); x.onclick = () => close(null);
     btns.append(d, x); b.append(btns);
   });
+  if (choice === 'teams') {
+    let current = await readLineup(files || []);
+    if (!current) {
+      const mf = (files || []).find((f) => f.name === 'meta.json');
+      if (mf) { try { current = cleanLineup((await drive.fetchJson(mf.id)).lineup); } catch { /* none */ } }
+    }
+    const l = await lineupSheet(current || lastLineup(), { skipLabel: 'Cancel' });
+    if (l) {
+      try { await drive.uploadJson('lineup.json', folder.id, l); toast('Teams saved — they will open your next highlights.'); } catch (e) { toast('Could not save: ' + e.message); }
+    }
+    return;
+  }
   if (choice === 'free') {
     try {
       for (let i = 0; i < raw.length; i += 8) await Promise.all(raw.slice(i, i + 8).map((f) => drive.trash(f.id)));
@@ -400,13 +519,13 @@ function renderRoom() {
   }) : [el('p', 'muted', 'No footage yet. Tap "Record from my phone" when the game starts.')]));
   const usable = recordings.filter((r) => r.metaId);
   $('#room-make').disabled = !usable.length;
-  $('#room-make').textContent = usable.length > 1 ? `✨ Make highlights from ${new Set(usable.map((r) => r.who)).size > 1 ? new Set(usable.map((r) => r.who)).size + ' people' : usable.length + ' videos'}` : '✨ Make highlights';
+  $('#room-make').textContent = usable.length > 1 ? `Make highlights — ${new Set(usable.map((r) => r.who)).size > 1 ? new Set(usable.map((r) => r.who)).size + ' cameras' : usable.length + ' videos'}` : 'Make highlights';
   const rl = [...reels].sort((a, b) => (b.created && b.created.toMillis ? b.created.toMillis() : 0) - (a.created && a.created.toMillis ? a.created.toMillis() : 0));
   $('#room-reels').replaceChildren(...(rl.length ? rl.map((x) => {
     const row = el('div', 'reel-row');
     const t = el('div'); t.append(el('b', '', `Highlights by ${x.who || '?'}`), el('span', '', `${x.angles || 1} angle${x.angles > 1 ? 's' : ''} · ${x.clips || 0} rallies · ${fmtTime(x.seconds)}`));
     row.append(t);
-    if (x.link) { const a = el('a', 'btn primary', '▶ Watch'); a.href = x.link; a.target = '_blank'; a.rel = 'noopener'; row.append(a); }
+    if (x.link) { const a = el('a', 'btn primary', 'Watch'); a.href = x.link; a.target = '_blank'; a.rel = 'noopener'; row.append(a); }
     return row;
   }) : [el('p', 'muted small', 'Highlights anyone makes show up here for everyone.')]));
   if (recorder && recorder.recording) { updateRoomPill(); checkStopAll(); }
@@ -416,6 +535,10 @@ function renderRoom() {
 $('#room-rec').addEventListener('click', () => needDrive(() => openCamera(curRoom)));
 $('#room-upload').addEventListener('click', () => needDrive(() => pickVideos(curRoom)));
 $('#room-make').addEventListener('click', () => makeHighlights({ room: curRoom }));
+$('#room-teams').addEventListener('click', async () => {
+  const l = await lineupSheet(roomLineup() || lastLineup(), { skipLabel: 'Cancel' });
+  if (l) { await R.setLineup(curRoom, l).catch(() => {}); toast('Teams saved for everyone in the room'); }
+});
 
 // ---------- record ----------
 $('#rec-solo').addEventListener('click', () => needDrive(() => openCamera(null)));
@@ -431,11 +554,40 @@ function openCamera(roomCode) {
   $('#countdown').hidden = true; amReady = false; primed = false; syncStartAt = 0;
   $('#rec-ready').textContent = "I'm ready"; $('#rec-ready').classList.remove('on');
   if (roomCode) checkSync();
+  camLineup = null; updateTeamsPill();
   recorder = new Recorder(drive, { onStatus: recStatus, onNeedAuth: (on) => { $('#reauth').hidden = !on; if (on && navigator.vibrate) navigator.vibrate(200); } });
   recorder.openCamera($('#preview'), settings.quality, FAKECAM)
-    .then(() => keepAwake(true))
+    .then(() => { keepAwake(true); askTeamsOnOpen(); })
     .catch((e) => { toast('Camera blocked: ' + e.message + '. Allow camera + microphone for this site.', 6000); recorder = null; backFromCamera(); });
 }
+
+// ----- teams for this recording -----
+let camLineup = null;
+function roomLineup() {
+  if (!roomState) return null;
+  const withL = roomState.members.filter((m) => cleanLineup(m.lineup))
+    .sort((a, b) => ((b.lineupAt && b.lineupAt.toMillis ? b.lineupAt.toMillis() : 0) - (a.lineupAt && a.lineupAt.toMillis ? a.lineupAt.toMillis() : 0)));
+  return withL.length ? cleanLineup(withL[0].lineup) : null;
+}
+function updateTeamsPill() {
+  const l = camLineup;
+  $('#rec-teams').textContent = l ? `Teams: ${l.teams.map((t) => t.name || 'Team').join(' vs ')}` : 'Teams';
+}
+async function askTeamsOnOpen() {
+  if (recRoom) {
+    const rl = roomLineup();
+    if (rl) { camLineup = rl; updateTeamsPill(); toast('Teams loaded from the room', 2000); return; }
+  }
+  const l = await lineupSheet(lastLineup(), { title: 'Who is playing?' });
+  if (l) { camLineup = l; if (recRoom) R.setLineup(recRoom, l).catch(() => {}); }
+  updateTeamsPill();
+}
+$('#rec-teams').addEventListener('click', async () => {
+  const l = await lineupSheet(camLineup || roomLineup() || lastLineup(), { skipLabel: 'Cancel' });
+  if (!l) return;
+  camLineup = l; updateTeamsPill();
+  if (recRoom) R.setLineup(recRoom, l).catch(() => {});
+});
 function backFromCamera() { if (recRoom && curRoom) { show('room'); renderRoom(); } else goHome(); }
 
 $('#rec-back').addEventListener('click', () => {
@@ -516,7 +668,7 @@ function updateRoomPill() {
   if (!recRoom || !roomState) { p.hidden = true; return; }
   const live = roomState.members.filter((m) => memberStatus(m)[0] === 'live').length;
   p.hidden = false;
-  p.textContent = `👥 ${live || 1} filming`;
+  p.textContent = `${live || 1} filming`;
 }
 
 $('#rec-start').addEventListener('click', () => {
@@ -545,6 +697,7 @@ function startRecording(startMs) {
       if (rid) await R.updateRecording(room.code, rid, { metaId, duration: snap.duration, status: final ? 'done' : 'recording' });
     },
   });
+  recorder.meta.lineup = camLineup || null; // saved with the recording → opens the highlights
   busy = true;
   $('#rec-idle').hidden = true; $('#rec-live').hidden = false;
   updateRoomPill();
@@ -566,7 +719,7 @@ function checkStopAll() {
 }
 
 function recStatus(s) {
-  $('#rec-cloud').textContent = s.waiting ? `☁ ${s.uploaded} saved · ${s.waiting} sending` : `☁ ${s.uploaded} saved`;
+  $('#rec-cloud').textContent = s.waiting ? `${s.uploaded} saved · ${s.waiting} sending` : `${s.uploaded} saved to Drive`;
   $('#rec-cloud').classList.toggle('warn', s.waitingMB > 120);
 }
 
@@ -593,7 +746,7 @@ $('#rec-stop').addEventListener('click', async () => {
       const c = await sheet((b, close) => {
         b.append(el('h3', '', 'Stop recording'), el('p', 'muted', `${others} other phone${others === 1 ? ' is' : 's are'} still filming.`));
         const btns = el('div', 'btns');
-        const all = el('button', 'btn rec big', '■ Stop everyone'); all.onclick = () => close('all');
+        const all = el('button', 'btn primary big', 'Stop everyone'); all.onclick = () => close('all');
         const me = el('button', 'btn big', 'Just me'); me.onclick = () => close('me');
         const no = el('button', 'btn ghost big', 'Keep filming'); no.onclick = () => close(null);
         btns.append(all, me, no); b.append(btns);
@@ -638,9 +791,14 @@ function pickVideos(roomCode) {
   $('#file-pick').value = '';
   $('#file-pick').click();
 }
-$('#file-pick').addEventListener('change', () => {
+$('#file-pick').addEventListener('change', async () => {
   const files = [...$('#file-pick').files];
-  if (files.length && importCtx) importFiles(files, importCtx);
+  if (!files.length || !importCtx) return;
+  const rl = importCtx.room ? roomLineup() : null;
+  const l = rl || await lineupSheet(lastLineup(), { title: 'Who is playing?' });
+  importCtx.lineup = l || null;
+  if (l && importCtx.room && !rl) R.setLineup(importCtx.room, l).catch(() => {});
+  importFiles(files, importCtx);
 });
 $('#imp-stop').addEventListener('click', async () => { if (await confirmSheet('Stop uploading?', 'Videos that are not finished will not be saved.', 'Stop', true)) importStop = true; });
 $('#imp-done').addEventListener('click', () => { if (importCtx && importCtx.room && curRoom) { show('room'); renderRoom(); } else goHome(); });
@@ -683,14 +841,14 @@ async function importFiles(files, ctx) {
       if (anRes.thumb) await drive.uploadThumb(anRes.thumb, folderId).catch(() => {});
       const startMs = (f.lastModified || Date.now()) - anRes.duration * 1000;
       const meta = { v: 2, app: 'rally-reel', kind: 'file', name: f.name, who: myName(), fileId: upRes.id, mime, duration: anRes.duration,
-        timeline: anRes.timeline, marks: [], startMs, approx: true, room: room ? room.code : null, created: new Date().toISOString() };
+        timeline: anRes.timeline, marks: [], startMs, approx: true, room: room ? room.code : null, created: new Date().toISOString(), lineup: ctx.lineup || null };
       const m = await drive.uploadJson('meta.json', folderId, meta);
       if (room && recId) await R.updateRecording(room.code, recId, { metaId: m.id, duration: anRes.duration, startMs, status: 'done' });
-      row.st.textContent = `✓ Saved · ${fmtTime(anRes.duration)}`;
+      row.st.textContent = `Saved · ${fmtTime(anRes.duration)}`;
       row.st.classList.remove('muted');
       ok++;
     } catch (e) {
-      row.st.textContent = '✕ ' + (e.message || 'failed');
+      row.st.textContent = 'Failed: ' + (e.message || 'unknown error');
     }
   }
   busy = false;
@@ -744,6 +902,7 @@ async function loadFolderRec(folderId, who) {
 let editStop = false;
 async function makeHighlights(target) {
   // everything that needs "a tap" happens first, before any waiting
+  if (!drive.valid && drive.preferRedirect) { toast('Sign in to Google first, then tap again'); drive.signInRedirect(target.room || ''); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
   const ac = new AC();
   if (ac.resume) ac.resume();
@@ -761,7 +920,7 @@ async function makeHighlights(target) {
   try {
     await authP;
     say('Collecting footage…');
-    let recs = [], title = '', outFolder = null, outName = '';
+    let recs = [], title = '', outFolder = null, outName = '', lineup = null;
     if (roomCode) {
       const room = roomState && roomState.room;
       title = room ? room.name : 'Volleyball';
@@ -786,11 +945,14 @@ async function makeHighlights(target) {
       const minOff = Math.min(...recs.map((r) => r.offset));
       recs.forEach((r) => { r.offset -= minOff; });
       outName = `Highlights ${title} ${stamp()}`;
+      lineup = roomLineup() || recs.map((r) => cleanLineup(r.meta.lineup)).find(Boolean) || null;
     } else {
       const folder = target.folder;
       const info = parseFolder(folder.name);
       title = info.label && info.label !== 'Upload' ? info.label : 'Volleyball';
       recs = [await loadFolderRec(folder.id)];
+      try { lineup = await readLineup(await listFolderAny(folder.id)); } catch { /* none */ }
+      lineup = lineup || cleanLineup(recs[0].meta.lineup);
       outFolder = folder.id;
       outName = `Highlights ${folder.name.replace(/\s*\[[A-Z0-9]+\]$/, '')}`;
       if (!(recs[0].segs ? recs[0].segs.length : recs[0].fileId)) throw new Error('No video found in this game.');
@@ -799,6 +961,7 @@ async function makeHighlights(target) {
     say('Finding the best rallies…');
     const { plan, clips } = buildMultiPlan(recs, settings.length, title);
     if (!clips.length) throw new Error('Could not find any rallies.');
+    plan.splice(1, 0, ...introScenes(lineup)); // official-style team intro after the title
     const recMap = new Map(recs.map((r) => [r.key, r]));
 
     const getSrc = (key) => {

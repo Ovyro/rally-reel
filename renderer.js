@@ -2,12 +2,13 @@
 // camera-angle labels, fades, slow-motion replays from other phones and an outro,
 // and records the result as one new video that streams straight to Drive.
 
-import { planSeconds } from './highlights.js?v=7';
+import { planSeconds } from './highlights.js?v=8';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ease = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
-const FONT = '"Outfit", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-const ORANGE = '#ff6a1f', GOLD = '#ffd23f', BLUE = '#4d7cff', RED = '#ff3b5c';
+const FONT = '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+const COND = '"Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif';
+const POS_NAMES = { S: 'SETTER', OH: 'OUTSIDE HITTER', OPP: 'OPPOSITE', MB: 'MIDDLE BLOCKER', L: 'LIBERO', DS: 'DEFENSIVE SPECIALIST' };
 
 function waitEvent(el, ev, ms) {
   return new Promise((res) => {
@@ -54,18 +55,14 @@ function rr(g, x, y, w, h, r) {
 function drawBall(g, cx, cy, r, rot) {
   g.save(); g.translate(cx, cy); g.rotate(rot);
   g.fillStyle = '#fff'; g.beginPath(); g.arc(0, 0, r, 0, 7); g.fill();
-  g.save(); g.clip();
-  g.fillStyle = GOLD; g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, r, 0.2, 2.2); g.fill();
-  g.fillStyle = BLUE; g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, r, 2.2, 4.2); g.fill();
-  g.restore();
-  g.strokeStyle = '#0a0f1f'; g.lineWidth = r * 0.07;
+  g.strokeStyle = '#0b0b0b'; g.lineWidth = r * 0.075;
   for (let k = 0; k < 3; k++) { g.rotate((Math.PI * 2) / 3); g.beginPath(); g.arc(r * 0.9, 0, r * 0.95, Math.PI * 0.62, Math.PI * 1.38); g.stroke(); }
-  g.beginPath(); g.arc(0, 0, r, 0, 7); g.stroke();
   g.restore();
 }
 
 export async function renderReel({ plan, canvas, ac, players, getSrc, releaseSrc, sink, mime, dateLabel, onProgress, shouldStop }) {
   const firstPiece = plan.find((s) => s.pieces).pieces[0];
+  try { await Promise.race([Promise.all([document.fonts.load('800 60px "Barlow Condensed"'), document.fonts.load('600 20px "Inter"')]), sleep(2500)]); } catch { /* system font */ }
   const vids = players || makePlayers();
   const first = await getSrc(firstPiece.src);
   await loadInto(vids[0], first.url);
@@ -103,31 +100,101 @@ export async function renderReel({ plan, canvas, ac, players, getSrc, releaseSrc
   }
 
   function bg() {
-    const grd = g.createLinearGradient(0, 0, W, H);
-    grd.addColorStop(0, '#070b18'); grd.addColorStop(1, '#16204a');
-    g.fillStyle = grd; g.fillRect(0, 0, W, H);
-    const gl = g.createRadialGradient(W * 0.85, H * 0.1, 0, W * 0.85, H * 0.1, W * 0.6);
-    gl.addColorStop(0, 'rgba(255,106,31,.35)'); gl.addColorStop(1, 'rgba(255,106,31,0)');
+    g.fillStyle = '#0b0b0b'; g.fillRect(0, 0, W, H);
+    const gl = g.createRadialGradient(W / 2, H * 0.45, 0, W / 2, H * 0.45, Math.max(W, H) * 0.7);
+    gl.addColorStop(0, 'rgba(255,255,255,.07)'); gl.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = gl; g.fillRect(0, 0, W, H);
   }
+  function rule(y, t, wMax) { // thin white line that grows from the centre
+    const w = wMax * ease(t);
+    g.fillStyle = '#fff'; g.fillRect(W / 2 - w / 2, y, w, Math.max(1, 2 * u));
+  }
+  function spaced(text, size, weight = 700, font = FONT) {
+    g.font = `${weight} ${size}px ${font}`;
+    if ('letterSpacing' in g) { g.letterSpacing = `${Math.round(size * 0.32)}px`; return text; }
+    return text.split('').join(' ');
+  }
+  function resetSpacing() { if ('letterSpacing' in g) g.letterSpacing = '0px'; }
 
   function drawTitle(t, scene) {
     bg();
-    g.save(); g.globalAlpha = 0.95; g.fillStyle = ORANGE;
-    const sx = -W + ease(t / 0.6) * W * 1.25;
-    g.beginPath(); g.moveTo(sx, H * 0.66); g.lineTo(sx + W * 1.3, H * 0.5); g.lineTo(sx + W * 1.3, H * 0.57); g.lineTo(sx, H * 0.73); g.fill();
-    g.restore();
     const a = ease(t / 0.5);
-    drawBall(g, W / 2, H * 0.27 - (1 - a) * 90 * u, 60 * u, t * 2.4);
-    g.globalAlpha = a; g.textAlign = 'center';
-    g.fillStyle = GOLD; g.font = `800 ${28 * u}px ${FONT}`;
-    g.fillText((scene.title || 'VOLLEYBALL').toUpperCase().split('').join(' '), W / 2, H * 0.45);
+    g.textAlign = 'center';
+    g.globalAlpha = a;
+    drawBall(g, W / 2, H * 0.24, 34 * u, t * 1.8);
+    g.fillStyle = '#9a9a9a';
+    g.fillText(spaced((scene.title || 'Volleyball').toUpperCase(), 24 * u, 700), W / 2, H * 0.4); resetSpacing();
+    rule(H * 0.43, t / 0.7, W * 0.5);
+    const s = 0.86 + 0.14 * ease((t - 0.1) / 0.5);
+    g.fillStyle = '#fff'; g.font = `800 ${150 * u * s}px ${COND}`;
+    g.fillText('HIGHLIGHTS', W / 2, H * 0.43 + 140 * u);
+    rule(H * 0.43 + 168 * u, (t - 0.2) / 0.7, W * 0.5);
+    g.fillStyle = '#bdbdbd'; g.font = `600 ${24 * u}px ${FONT}`;
+    g.fillText(dateLabel.toUpperCase() + (scene.phones > 1 ? `   ·   ${scene.phones} CAMERA ANGLES` : ''), W / 2, H * 0.43 + 214 * u);
+    g.globalAlpha = 1; g.textAlign = 'left';
+  }
+
+  function drawMatchup(t, scene) {
+    bg();
+    const [A, B] = scene.teams;
+    const a = ease(t / 0.45);
+    g.textAlign = 'center';
+    g.fillStyle = '#9a9a9a'; g.globalAlpha = a;
+    g.fillText(spaced('TODAY’S MATCH', 22 * u, 700), W / 2, H * 0.2); resetSpacing();
+    const fit = (txt, max) => { let size = 92 * u; g.font = `800 ${size}px ${COND}`; while (g.measureText(txt).width > max && size > 30 * u) { size -= 4 * u; g.font = `800 ${size}px ${COND}`; } };
     g.fillStyle = '#fff';
-    const s = 0.8 + 0.2 * ease((t - 0.15) / 0.5);
-    g.font = `900 ${118 * u * s}px ${FONT}`;
-    g.fillText('HIGHLIGHTS', W / 2, H * 0.45 + 118 * u);
-    g.fillStyle = '#c9d2ea'; g.font = `600 ${27 * u}px ${FONT}`;
-    g.fillText(dateLabel + (scene.phones > 1 ? `  ·  ${scene.phones} camera angles` : ''), W / 2, H * 0.45 + 172 * u);
+    fit(A.toUpperCase(), W * 0.82);
+    g.fillText(A.toUpperCase(), W / 2 - (1 - a) * W * 0.4, H * 0.42);
+    const bw = 96 * u, bh = 60 * u;
+    g.globalAlpha = ease((t - 0.25) / 0.3);
+    g.fillStyle = '#fff'; g.fillRect(W / 2 - bw / 2, H * 0.5 - bh / 2, bw, bh);
+    g.fillStyle = '#0b0b0b'; g.font = `800 ${44 * u}px ${COND}`; g.fillText('VS', W / 2, H * 0.5 + 16 * u);
+    g.globalAlpha = a; g.fillStyle = '#fff';
+    fit(B.toUpperCase(), W * 0.82);
+    g.fillText(B.toUpperCase(), W / 2 + (1 - a) * W * 0.4, H * 0.66);
+    g.globalAlpha = 1; g.textAlign = 'left';
+  }
+
+  function drawLineup(t, scene) {
+    bg();
+    const team = scene.team;
+    const players = team.players;
+    const a = ease(t / 0.4);
+    const left = W * 0.08, right = W * 0.92;
+    g.globalAlpha = a;
+    g.fillStyle = '#9a9a9a';
+    g.fillText(spaced('STARTING LINEUP', 20 * u, 700), left, H * 0.13); resetSpacing();
+    g.fillStyle = '#fff'; g.font = `800 ${74 * u}px ${COND}`;
+    g.fillText((team.name || 'TEAM').toUpperCase(), left, H * 0.13 + 70 * u);
+    g.fillRect(left, H * 0.13 + 88 * u, (right - left) * ease(t / 0.6), 2 * u);
+    const cols = players.length > 7 ? 2 : 1;
+    const perCol = Math.ceil(players.length / cols);
+    const colW = (right - left) / cols;
+    const top = H * 0.13 + 118 * u;
+    const rowH = Math.min(62 * u, (H * 0.95 - top) / perCol);
+    players.forEach((p, i) => {
+      const col = Math.floor(i / perCol), row = i % perCol;
+      const ra = ease((t - 0.35 - i * 0.12) / 0.35);
+      if (ra <= 0) return;
+      const x = left + col * colW + (1 - ra) * 30 * u, y = top + row * rowH;
+      g.globalAlpha = ra;
+      const box = rowH * 0.78;
+      g.fillStyle = '#fff'; g.fillRect(x, y, box, box);
+      g.fillStyle = '#0b0b0b'; g.textAlign = 'center'; g.font = `800 ${box * 0.62}px ${COND}`;
+      g.fillText(p.num || '–', x + box / 2, y + box * 0.74);
+      g.textAlign = 'left'; g.fillStyle = '#fff'; g.font = `700 ${box * 0.6}px ${COND}`;
+      const nameX = x + box + 14 * u;
+      let name = (p.name || '').toUpperCase();
+      const maxName = colW - box - 30 * u - (cols === 1 ? 300 * u : 0);
+      while (g.measureText(name).width > maxName && name.length > 4) name = name.slice(0, -2) + '…';
+      g.fillText(name, nameX, y + box * 0.72);
+      const pos = POS_NAMES[p.pos] || '';
+      if (pos) {
+        g.fillStyle = '#9a9a9a'; g.font = `600 ${Math.min(20 * u, box * 0.34)}px ${FONT}`;
+        if (cols === 1) { g.textAlign = 'right'; g.fillText(pos, right, y + box * 0.66); g.textAlign = 'left'; }
+        else g.fillText(pos, nameX, y + box * 0.72 + box * 0.38);
+      }
+    });
     g.globalAlpha = 1; g.textAlign = 'left';
   }
 
@@ -135,34 +202,36 @@ export async function renderReel({ plan, canvas, ac, players, getSrc, releaseSrc
     bg();
     const a = ease(t / 0.5);
     g.globalAlpha = a; g.textAlign = 'center';
-    drawBall(g, W / 2, H * 0.34, 46 * u, t * 1.6);
-    g.fillStyle = '#fff'; g.font = `900 ${74 * u}px ${FONT}`;
-    g.fillText("THAT'S THE GAME", W / 2, H * 0.6);
-    g.fillStyle = ORANGE; g.font = `700 ${26 * u}px ${FONT}`;
-    g.fillText('made with Rally Reel', W / 2, H * 0.6 + 52 * u);
+    drawBall(g, W / 2, H * 0.32, 32 * u, t * 1.4);
+    g.fillStyle = '#fff'; g.font = `800 ${104 * u}px ${COND}`;
+    g.fillText('THAT’S THE GAME', W / 2, H * 0.58);
+    rule(H * 0.58 + 22 * u, t / 0.7, W * 0.36);
+    g.fillStyle = '#9a9a9a';
+    g.fillText(spaced('RALLY REEL', 20 * u, 700), W / 2, H * 0.58 + 64 * u); resetSpacing();
     g.globalAlpha = 1; g.textAlign = 'left';
   }
 
-  function badge(text, color, x, y) {
-    g.font = `800 ${26 * u}px ${FONT}`;
-    const w = g.measureText(text).width + 42 * u, h = 52 * u;
-    g.fillStyle = 'rgba(7,11,24,.66)'; rr(g, x, y, w, h, 14 * u); g.fill();
-    g.fillStyle = color; rr(g, x, y, 8 * u, h, 4 * u); g.fill();
-    g.fillStyle = '#fff'; g.fillText(text, x + 22 * u, y + 35 * u);
+  function badge(text, x, y) {
+    g.font = `700 ${30 * u}px ${COND}`;
+    const w = g.measureText(text).width + 40 * u, h = 50 * u;
+    g.fillStyle = 'rgba(11,11,11,.72)'; g.fillRect(x, y, w, h);
+    g.fillStyle = '#fff'; g.fillRect(x, y, 6 * u, h);
+    g.fillText(text, x + 22 * u, y + 36 * u);
     return w;
   }
-  function camChip(who) {
+  function camChip(who, lift = 0) {
     if (!who) return;
-    g.font = `700 ${24 * u}px ${FONT}`;
-    const text = `● ${who}'s camera`;
-    const w = g.measureText(text).width + 32 * u, h = 44 * u, x = 28 * u, y = H - h - 28 * u;
-    g.fillStyle = 'rgba(7,11,24,.6)'; rr(g, x, y, w, h, h / 2); g.fill();
-    g.fillStyle = '#fff'; g.fillText(text, x + 16 * u, y + 30 * u);
+    g.font = `600 ${20 * u}px ${FONT}`;
+    const text = `CAMERA · ${String(who).toUpperCase()}`;
+    const w = g.measureText(text).width + 30 * u, h = 40 * u, x = 28 * u, y = H - h - 28 * u - lift;
+    g.fillStyle = 'rgba(11,11,11,.66)'; g.fillRect(x, y, w, h);
+    g.fillStyle = '#fff'; g.fillText(text, x + 15 * u, y + 27 * u);
   }
-  function bigCaption(text, color) {
-    g.textAlign = 'center'; g.font = `900 ${46 * u}px ${FONT}`;
-    g.fillStyle = 'rgba(0,0,0,.55)'; g.fillText(text, W / 2 + 3 * u, H - 40 * u + 3 * u);
-    g.fillStyle = color; g.fillText(text, W / 2, H - 40 * u);
+  function bigCaption(text) {
+    g.textAlign = 'center'; g.font = `800 ${54 * u}px ${COND}`;
+    const w = g.measureText(text).width + 50 * u, h = 72 * u;
+    g.fillStyle = 'rgba(11,11,11,.72)'; g.fillRect(W / 2 - w / 2, H - h - 26 * u, w, h);
+    g.fillStyle = '#fff'; g.fillText(text, W / 2, H - 26 * u - 20 * u);
     g.textAlign = 'left';
   }
 
@@ -170,16 +239,19 @@ export async function renderReel({ plan, canvas, ac, players, getSrc, releaseSrc
     const now = performance.now();
     g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
     const s = st.scene;
-    if (st.mode === 'title') drawTitle((now - st.sceneT0) / 1000, s);
-    else if (st.mode === 'outro') drawOutro((now - st.sceneT0) / 1000);
+    const ts = (now - st.sceneT0) / 1000;
+    if (st.mode === 'title') drawTitle(ts, s);
+    else if (st.mode === 'matchup') drawMatchup(ts, s);
+    else if (st.mode === 'lineup') drawLineup(ts, s);
+    else if (st.mode === 'outro') drawOutro(ts);
     else if (st.mode === 'video' && st.video && st.video.readyState >= 2) {
       drawContain(st.video);
-      if (s && s.type === 'clip') { badge(`HIGHLIGHT ${s.n}/${s.total}${s.marked ? '  ★' : ''}`, ORANGE, 28 * u, 28 * u); camChip(s.who); }
-      if (s && s.type === 'angle') { badge('OTHER ANGLE · SLOW-MO', BLUE, 28 * u, 28 * u); camChip(s.who); }
+      if (s && s.type === 'clip') { badge(`HIGHLIGHT ${s.n} / ${s.total}${s.marked ? '  ★' : ''}`, 28 * u, 28 * u); camChip(s.who); }
+      if (s && s.type === 'angle') { badge('OTHER ANGLE · SLOW MOTION', 28 * u, 28 * u); camChip(s.who); }
       if (s && s.type === 'replay') {
-        badge(s.of > 1 ? `REPLAY · ANGLE ${s.n}/${s.of}` : 'REPLAY · 0.5×', RED, 28 * u, 28 * u);
-        bigCaption('PLAY OF THE MATCH', GOLD);
-        if (s.who) { g.save(); g.translate(0, -70 * u); camChip(s.who); g.restore(); }
+        badge(s.of > 1 ? `REPLAY · ANGLE ${s.n} / ${s.of}` : 'REPLAY · SLOW MOTION', 28 * u, 28 * u);
+        bigCaption('PLAY OF THE MATCH');
+        camChip(s.who, 96 * u);
       }
     }
     const a = curFade();
