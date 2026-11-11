@@ -2,9 +2,9 @@
 // the moment it's finished. Pieces live only in memory until uploaded, then are
 // dropped – nothing is written to the phone's storage.
 
-import { LiveAnalyzer } from './analyzer.js?v=9';
-import { createDemoStream } from './demo.js?v=9';
-import { sleep } from './drive.js?v=9';
+import { LiveAnalyzer } from './analyzer.js?v=11';
+import { createDemoStream } from './demo.js?v=11';
+import { sleep } from './drive.js?v=11';
 
 export const SEG_SEC = 10;
 const POOL_CLIPS = 400; // upload slots reserved ahead (~66 min) so long matches survive sign-in expiry
@@ -97,7 +97,7 @@ export class Recorder {
       // small preview picture for the game card
       setTimeout(async () => {
         try {
-          const { snapshot } = await import('./importer.js?v=9');
+          const { snapshot } = await import('./importer.js?v=11');
           const b = await snapshot(this.video);
           if (b) await this.drive.uploadThumb(b, id);
         } catch { /* no thumbnail */ }

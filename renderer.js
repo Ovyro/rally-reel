@@ -2,7 +2,7 @@
 // camera-angle labels, fades, slow-motion replays from other phones and an outro,
 // and records the result as one new video that streams straight to Drive.
 
-import { planSeconds } from './highlights.js?v=9';
+import { planSeconds } from './highlights.js?v=11';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ease = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
@@ -34,7 +34,11 @@ async function loadInto(el, url) {
   if (el._url === url) return;
   el._url = url;
   el.src = url;
-  if (el.readyState < 1) await waitEvent(el, 'loadedmetadata', 12000);
+  if (el.readyState < 1) {
+    // wait for the video to open – or fail fast if this device can't play its format (e.g. WebM on older iPhones)
+    await Promise.race([waitEvent(el, 'loadedmetadata', 12000), waitEvent(el, 'error', 12000)]);
+    if (el.error || el.readyState < 1) { el._url = null; throw new Error('This device cannot play one of the clips'); }
+  }
   if (!isFinite(el.duration)) { // recorder files often don't know their length
     el.currentTime = 1e7;
     await waitEvent(el, 'seeked', 3000);
@@ -292,6 +296,7 @@ export async function renderReel({ plan, canvas, ac, players, getSrc, releaseSrc
       }
       const vol = scene.type === 'clip' ? 1 : 0.7;
       const sceneGain = ac.createGain(); sceneGain.gain.value = 0; sceneGain.connect(master);
+      let scenePlayed = false; // fade in on the first clip that actually plays
       let lastGain = sceneGain;
       for (let pi = 0; pi < scene.pieces.length; pi++, fi++) {
         if (shouldStop && shouldStop()) break;
@@ -312,7 +317,8 @@ export async function renderReel({ plan, canvas, ac, players, getSrc, releaseSrc
         const gainNode = useEl ? elGain[mySlot] : sceneGain;
         lastGain = gainNode;
         const t = ac.currentTime;
-        if (pi === 0) {
+        if (!scenePlayed) {
+          scenePlayed = true;
           fadeTo(0, 0.3);
           gainNode.gain.cancelScheduledValues(t); gainNode.gain.setValueAtTime(0, t); gainNode.gain.linearRampToValueAtTime(vol, t + 0.3);
         } else { gainNode.gain.cancelScheduledValues(t); gainNode.gain.setValueAtTime(vol, t); }

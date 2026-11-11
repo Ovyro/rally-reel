@@ -1,9 +1,9 @@
-import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=9';
-import { Recorder, pickMime } from './recorder.js?v=9';
-import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=9';
-import { renderReel, makePlayers } from './renderer.js?v=9';
-import { analyzeFile, guessMime } from './importer.js?v=9';
-import * as R from './rooms.js?v=9';
+import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=11';
+import { Recorder, pickMime } from './recorder.js?v=11';
+import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=11';
+import { renderReel, makePlayers } from './renderer.js?v=11';
+import { analyzeFile, guessMime } from './importer.js?v=11';
+import * as R from './rooms.js?v=11';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -35,7 +35,7 @@ document.querySelectorAll('#tabbar button').forEach((b) => b.addEventListener('c
   if (b.dataset.tab === 'home') { goHome(); return; }
   show('positions');
   try {
-    if (!positionsMod) positionsMod = await import('./positions.js?v=9');
+    if (!positionsMod) positionsMod = await import('./positions.js?v=11');
     positionsMod.mount($('#pos-root'));
   } catch (e) { $('#pos-root').textContent = 'Could not load: ' + e.message; }
 }));
@@ -144,12 +144,18 @@ function introScenes(lineup) {
   return out;
 }
 
-let wakeLock = null;
+let wakeLock = null, warnedLock = false;
 async function keepAwake(on) {
+  let ok = !on;
   try {
-    if (on && 'wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+    if (on && 'wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); ok = true; }
     else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
-  } catch { /* not supported */ }
+  } catch { /* not supported / not allowed */ }
+  // older phones can't keep the screen on by themselves – if it locks, the camera stops
+  if (on && !ok && !warnedLock && /Mobi|Android|iP(hone|ad|od)/.test(navigator.userAgent)) {
+    warnedLock = true;
+    toast('Tip: set Auto-Lock / Screen timeout to “Never” in your phone settings while filming', 7000);
+  }
 }
 document.addEventListener('visibilitychange', () => { if (busy && document.visibilityState === 'visible') keepAwake(true); });
 window.addEventListener('beforeunload', (e) => { if (busy) { e.preventDefault(); e.returnValue = ''; } });
@@ -984,8 +990,9 @@ async function makeHighlights(target) {
           }
           const url = URL.createObjectURL(blob);
           let audio = null;
-          try { audio = await ac.decodeAudioData(await blob.arrayBuffer()); } catch { /* no sound */ }
-          return { url, audio, own: true };
+          try { audio = await ac.decodeAudioData(await blob.arrayBuffer()); } catch { /* this device can't decode it separately */ }
+          // no separate sound track → use the video's own sound instead
+          return { url, audio, own: true, stream: !audio };
         })());
       }
       return cache.get(key);

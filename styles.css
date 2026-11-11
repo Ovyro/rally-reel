@@ -235,8 +235,8 @@ button.pill { cursor: pointer; }
 .team-tabs button.on small { color: #bbb; }
 .players { display: grid; gap: 6px; margin-top: 8px; }
 .prow { display: grid; grid-template-columns: 52px 1fr 1fr 32px; gap: 6px; align-items: center; }
-.prow input, .prow select { padding: 10px; font-size: 15px; border-radius: 10px; }
-.prow select { padding-right: 26px; font-size: 14px; }
+.prow input, .prow select { padding: 10px; font-size: 16px; border-radius: 10px; } /* 16px stops iPhone zooming in */
+.prow select { padding-right: 26px; }
 .prow .x { border: 0; background: none; font-size: 20px; color: var(--muted); cursor: pointer; }
 .add-player { margin-top: 8px; }
 

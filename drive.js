@@ -33,7 +33,9 @@ export class GoogleDrive {
   // Installed (home-screen) apps: Google's pop-up is unreliable there, use a full-page redirect.
   get preferRedirect() {
     if (!(window.RR_CONFIG && window.RR_CONFIG.redirectSignIn)) return false; // needs the redirect address registered with Google
-    return navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+    const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    // iPhone/iPad (Safari or home screen) and any installed app: full-page redirect is the most reliable
+    return ios || navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
   }
 
   redirectUri() { return new URL('./', location.href).href; }
