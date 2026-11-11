@@ -225,7 +225,9 @@ export function buildMultiPlan(recs, targetSec = 120, title = '') {
   const multi = recs.length > 1;
   // 1. every candidate from every phone, on the shared timeline
   const all = [];
-  for (const r of recs) for (const c of candidates(r.meta)) {
+  // phones without a sound/motion summary (died very early) only provide angles – unless no phone has one
+  const voters = recs.some((x) => !x.noDetect) ? recs.filter((x) => !x.noDetect) : recs;
+  for (const r of voters) for (const c of candidates(r.meta)) {
     all.push({ ...c, start: c.start + r.offset, end: c.end + r.offset, ev: c.ev + r.offset, rec: r });
   }
   all.sort((a, b) => a.ev - b.ev);

@@ -2,13 +2,13 @@
 // the moment it's finished. Pieces live only in memory until uploaded, then are
 // dropped – nothing is written to the phone's storage.
 
-import { LiveAnalyzer } from './analyzer.js?v=11';
-import { createDemoStream } from './demo.js?v=11';
-import { sleep } from './drive.js?v=11';
+import { LiveAnalyzer } from './analyzer.js?v=12';
+import { createDemoStream } from './demo.js?v=12';
+import { sleep } from './drive.js?v=12';
 
 export const SEG_SEC = 10;
 const POOL_CLIPS = 400; // upload slots reserved ahead (~66 min) so long matches survive sign-in expiry
-const POOL_META = 40;
+const POOL_META = 140; // ~70 min of summary saves reserved ahead
 
 const clipName = (i, ext) => `clip_${String(i).padStart(5, '0')}.${ext}`;
 const metaName = (v) => `meta_${String(v).padStart(4, '0')}.json`;
@@ -97,7 +97,7 @@ export class Recorder {
       // small preview picture for the game card
       setTimeout(async () => {
         try {
-          const { snapshot } = await import('./importer.js?v=11');
+          const { snapshot } = await import('./importer.js?v=12');
           const b = await snapshot(this.video);
           if (b) await this.drive.uploadThumb(b, id);
         } catch { /* no thumbnail */ }
@@ -118,7 +118,9 @@ export class Recorder {
     this.metaVersion = 0;
     this._startSegment();
     this.rotTimer = setInterval(() => this._rotate(), SEG_SEC * 1000);
-    this.metaTimer = setInterval(() => this._backupMeta(), 60000);
+    // save a summary every 30 s (first one after 15 s) so a phone that dies loses almost nothing
+    this.firstMeta = setTimeout(() => this._backupMeta(), 15000);
+    this.metaTimer = setInterval(() => this._backupMeta(), 30000);
     this._poolLoop();
     this._status();
   }
@@ -268,7 +270,7 @@ export class Recorder {
   async stop(onProgress) {
     this.meta.duration = this.clock();
     this.recording = false;
-    clearInterval(this.rotTimer); clearInterval(this.metaTimer);
+    clearInterval(this.rotTimer); clearInterval(this.metaTimer); clearTimeout(this.firstMeta);
     if (this.cur && this.cur.state !== 'inactive') this.cur.stop();
     await Promise.all(this.stops);
     this.analyzer.stop();

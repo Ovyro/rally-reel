@@ -141,12 +141,12 @@ export function watchRoom(code, cb) {
 
 export async function addRecording(code, data) {
   const ref = fs.doc(fs.collection(db, 'rooms', code, 'recordings'));
-  await fs.setDoc(ref, { uid, device: deviceId(), created: fs.serverTimestamp(), ...data });
+  await fs.setDoc(ref, { uid, device: deviceId(), created: fs.serverTimestamp(), updatedAt: fs.serverTimestamp(), ...data });
   return ref.id;
 }
 
 export async function updateRecording(code, id, data) {
-  try { await fs.updateDoc(fs.doc(db, 'rooms', code, 'recordings', id), data); } catch { /* retry next time */ }
+  try { await fs.updateDoc(fs.doc(db, 'rooms', code, 'recordings', id), { ...data, updatedAt: fs.serverTimestamp() }); } catch { /* retry next time */ }
 }
 
 export async function addReel(code, data) {

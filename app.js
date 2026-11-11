@@ -1,9 +1,9 @@
-import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=11';
-import { Recorder, pickMime } from './recorder.js?v=11';
-import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=11';
-import { renderReel, makePlayers } from './renderer.js?v=11';
-import { analyzeFile, guessMime } from './importer.js?v=11';
-import * as R from './rooms.js?v=11';
+import { GoogleDrive, MockDrive, ResumableWriter, FOLDER_MIME, sleep } from './drive.js?v=12';
+import { Recorder, pickMime } from './recorder.js?v=12';
+import { detectHighlights, buildMultiPlan, alignRecordings } from './highlights.js?v=12';
+import { renderReel, makePlayers } from './renderer.js?v=12';
+import { analyzeFile, guessMime } from './importer.js?v=12';
+import * as R from './rooms.js?v=12';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -35,7 +35,7 @@ document.querySelectorAll('#tabbar button').forEach((b) => b.addEventListener('c
   if (b.dataset.tab === 'home') { goHome(); return; }
   show('positions');
   try {
-    if (!positionsMod) positionsMod = await import('./positions.js?v=11');
+    if (!positionsMod) positionsMod = await import('./positions.js?v=12');
     positionsMod.mount($('#pos-root'));
   } catch (e) { $('#pos-root').textContent = 'Could not load: ' + e.message; }
 }));
@@ -489,6 +489,13 @@ $('#room-qr-btn').addEventListener('click', async () => {
   } catch { toast('Could not make the QR code.'); }
 });
 
+// A recording still marked "filming" whose phone hasn't saved anything for 90 s → phone died / lost connection.
+function recLost(r) {
+  if (r.status !== 'recording') return false;
+  const t = r.updatedAt && r.updatedAt.toMillis ? r.updatedAt.toMillis() : 0;
+  return !!t && R.now() - t > 90 * 1000;
+}
+
 function memberStatus(m) {
   const seen = m.seen && m.seen.toMillis ? m.seen.toMillis() : 0;
   const fresh = R.now() - seen < 3 * 60 * 1000;
@@ -517,13 +524,16 @@ function renderRoom() {
   $('#room-recs').replaceChildren(...(recs.length ? recs.map((r) => {
     const row = el('div', 'rec-row');
     const txt = el('div');
+    const lost = recLost(r);
+    const savedTo = r.startMs ? new Date(r.startMs + (r.duration || 0) * 1000).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '';
     txt.append(el('b', '', (r.who || '?') + (r.kind === 'file' ? ' · uploaded video' : '')),
-      el('span', '', r.status === 'recording' ? `filming… ${fmtTime(r.duration || 0)} saved` : r.status === 'uploading' ? 'uploading…' : `${fmtTime(r.duration)} of video`));
+      el('span', '', lost ? `Disconnected — footage saved up to ${savedTo || fmtTime(r.duration)}`
+        : r.status === 'recording' ? `filming… ${fmtTime(r.duration || 0)} saved` : r.status === 'uploading' ? 'uploading…' : `${fmtTime(r.duration)} of video`));
     row.append(avatar(r.who || '?'), txt);
-    if (r.status === 'recording') row.append(el('span', 'badge-live', 'LIVE'));
+    if (r.status === 'recording' && !lost) row.append(el('span', 'badge-live', 'LIVE'));
     return row;
   }) : [el('p', 'muted', 'No footage yet. Tap "Record from my phone" when the game starts.')]));
-  const usable = recordings.filter((r) => r.metaId);
+  const usable = recordings.filter((r) => r.metaId || (r.kind === 'live' && r.folderId));
   $('#room-make').disabled = !usable.length;
   $('#room-make').textContent = usable.length > 1 ? `Make highlights — ${new Set(usable.map((r) => r.who)).size > 1 ? new Set(usable.map((r) => r.who)).size + ' cameras' : usable.length + ' videos'}` : 'Make highlights';
   const rl = [...reels].sort((a, b) => (b.created && b.created.toMillis ? b.created.toMillis() : 0) - (a.created && a.created.toMillis ? a.created.toMillis() : 0));
@@ -930,17 +940,26 @@ async function makeHighlights(target) {
     if (roomCode) {
       const room = roomState && roomState.room;
       title = room ? room.name : 'Volleyball';
-      const docs = roomState.recordings.filter((r) => r.metaId);
-      if (!docs.length) throw new Error('No finished footage in this room yet.');
+      // every phone's footage – finished, still filming, or cut off when a phone died
+      const docs = roomState.recordings.filter((r) => r.metaId || (r.kind === 'live' && r.folderId));
+      if (!docs.length) throw new Error('No footage in this room yet.');
       const T0 = Math.min(...docs.map((r) => r.startMs || 0));
       let k = 0;
       for (const d of docs) {
         say(`Collecting footage… (${++k}/${docs.length})`);
         try {
-          const meta = await drive.fetchJson(d.metaId);
+          let meta = null;
+          if (d.metaId) { try { meta = await drive.fetchJson(d.metaId); } catch { meta = null; } }
+          // phone died before its first summary save: rebuild from the pieces in its folder
+          if (!meta) meta = { kind: 'live', segSec: 10, segments: [], marks: [], startMs: d.startMs, duration: 0, timeline: null };
           let files = null;
-          if (meta.kind !== 'file' && (!meta.segments || meta.segments.some((s) => !s.id)) && d.folderId) files = await listFolderAny(d.folderId);
+          // anything not cleanly finished: look in the folder for pieces uploaded after the last summary
+          if (meta.kind !== 'file' && d.folderId && (d.status !== 'done' || !meta.complete || !meta.segments || meta.segments.some((s) => !s.id))) {
+            try { files = await listFolderAny(d.folderId); } catch { files = null; }
+          }
           const rec = recFromMeta('r' + k, d.who || '?', meta, files);
+          // without a sound/motion summary this phone still gives camera angles, it just doesn't vote on rallies
+          if (!meta.timeline || !meta.timeline.loud || !meta.timeline.loud.length) rec.noDetect = true;
           rec.offset = ((meta.startMs || d.startMs || T0) - T0) / 1000;
           rec.approx = !!(d.approx || meta.approx);
           if (rec.segs ? rec.segs.length : rec.fileId) recs.push(rec);
